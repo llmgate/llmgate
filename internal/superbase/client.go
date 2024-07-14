@@ -1,0 +1,121 @@
+package superbase
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"github.com/llmgate/llmgate/internal/config"
+)
+
+type Endpoint struct {
+	EndpointId   string  `json:"endpoint_id"`
+	PostfixUrl   string  `json:"postfix_url"`
+	LlmProvider  string  `json:"llm_provider"`
+	LlmModel     string  `json:"llm_model"`
+	LlmMaxTokens int     `json:"llm_max_tokens"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+	PrePrompt    *string `json:"pre_prompt,omitempty"`
+	PostPrompt   *string `json:"post_prompt,omitempty"`
+	ProjectName  string  `json:"project_name"`
+}
+
+type EndpointOverride struct {
+	EndpointOverrideId string  `json:"endpoint_override_id"`
+	Distribution       int     `json:"distribution"`
+	LlmProvider        *string `json:"llm_provider,omitempty"`
+	LlmModel           *string `json:"llm_model,omitempty"`
+	LlmMaxTokens       int     `json:"llm_max_tokens,omitempty"`
+	PrePrompt          *string `json:"pre_prompt,omitempty"`
+	PostPrompt         *string `json:"post_prompt,omitempty"`
+	CreatedAt          string  `json:"created_at"`
+	EndpointId         string  `json:"endpoint_id"`
+}
+
+type SupabaseClient struct {
+	superbaseConfig config.SuperbaseConfig
+}
+
+func NewSupabaseClient(superbaseConfig config.SuperbaseConfig) *SupabaseClient {
+	return &SupabaseClient{
+		superbaseConfig: superbaseConfig,
+	}
+}
+
+func (s *SupabaseClient) GetEndpointDetails(projectName, postfix_url string) (*Endpoint, error) {
+	var endpoints []Endpoint
+	apiURL := fmt.Sprintf("%s/rest/v1/%s?postfix_url=eq.%s&project_name=eq.%s",
+		s.superbaseConfig.Url, s.superbaseConfig.EndpointsTableName, postfix_url, projectName)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return nil, fmt.Errorf("failed to get endpoint, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&endpoints)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(endpoints) == 0 {
+		return nil, fmt.Errorf("endpoint not found")
+	}
+
+	return &endpoints[0], nil
+}
+
+func (s *SupabaseClient) GetEndpointOverrides(endpointId string) (*EndpointOverride, error) {
+	var overrides []EndpointOverride
+	apiURL := fmt.Sprintf("%s/rest/v1/%s?endpoint_id=eq.%s",
+		s.superbaseConfig.Url, s.superbaseConfig.EndpointOverridesTableName, endpointId)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return nil, fmt.Errorf("failed to get endpoint override, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&overrides)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(overrides) == 0 {
+		return nil, nil
+	}
+
+	return &overrides[0], nil
+}

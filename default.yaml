@@ -1,0 +1,11 @@
+server:
+  port: "8080"
+clients:
+  openai:
+    key: some-key
+  superbase:
+    url: 'some-key'
+    key: 'some-key'
+    endpointstablename: 'some-key'
+  endpointoverridestablename: 'some-key'
+  
