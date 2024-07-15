@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/llmgate/llmgate/internal/superbase"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/pinecone"
+	"github.com/llmgate/llmgate/superbase"
 )
 
 type LLMHandler struct {

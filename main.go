@@ -9,9 +9,9 @@ import (
 
 	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/internal/handlers"
-	"github.com/llmgate/llmgate/internal/superbase"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/pinecone"
+	"github.com/llmgate/llmgate/superbase"
 )
 
 func main() {
