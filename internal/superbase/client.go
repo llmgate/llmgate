@@ -1,6 +1,7 @@
 package superbase
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,6 +33,15 @@ type EndpointOverride struct {
 	PostPrompt         *string `json:"post_prompt,omitempty"`
 	CreatedAt          string  `json:"created_at"`
 	EndpointId         string  `json:"endpoint_id"`
+}
+
+type Ingestion struct {
+	IngestionId string  `json:"ingestion_id"`
+	ContentType string  `json:"content_type"`
+	DataUrl     string  `json:"data_url"`
+	CreatedAt   *string `json:"created_at,omitempty"`
+	CompletedAt *string `json:"completed_at,omitempty"`
+	EndpointId  string  `json:"endpoint_id"`
 }
 
 type SupabaseClient struct {
@@ -118,4 +128,72 @@ func (s *SupabaseClient) GetEndpointOverrides(endpointId string) (*EndpointOverr
 	}
 
 	return &overrides[0], nil
+}
+
+func (s *SupabaseClient) StoreIngestion(ingestion Ingestion) error {
+	apiURL := fmt.Sprintf("%s/rest/v1/%s",
+		s.superbaseConfig.Url, s.superbaseConfig.IngestionsTableName)
+
+	data, err := json.Marshal(ingestion)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ingestion: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return fmt.Errorf("failed to store ingestion, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	return nil
+}
+
+func (s *SupabaseClient) GetIngestions(endpointId string) ([]Ingestion, error) {
+	var ingestions []Ingestion
+	apiURL := fmt.Sprintf("%s/rest/v1/%s?endpoint_id=eq.%s",
+		s.superbaseConfig.Url, s.superbaseConfig.IngestionsTableName, endpointId)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return nil, fmt.Errorf("failed to get ingestions, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&ingestions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return ingestions, nil
 }

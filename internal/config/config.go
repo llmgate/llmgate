@@ -18,6 +18,7 @@ type ServerConfig struct {
 type ClientsConfig struct {
 	OpenAI    OpenAIConfig
 	Superbase SuperbaseConfig
+	Pinecone  PineconeConfig
 }
 
 type GeminiConfig struct {
@@ -26,7 +27,8 @@ type GeminiConfig struct {
 }
 
 type OpenAIConfig struct {
-	Key string
+	Key            string
+	EmbeddingModal string
 }
 
 type SuperbaseConfig struct {
@@ -34,6 +36,12 @@ type SuperbaseConfig struct {
 	Key                        string
 	EndpointsTableName         string
 	EndpointOverridesTableName string
+	IngestionsTableName        string
+}
+
+type PineconeConfig struct {
+	Key       string
+	IndexHost string
 }
 
 func LoadConfig(configName string) (*Config, error) {

@@ -6,11 +6,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/llmgate/llmgate/internal/config"
 )
 
 const (
-	endpoint = "https://api.openai.com/v1/chat/completions"
+	completionsEndpoint = "https://api.openai.com/v1/chat/completions"
+	embeddingsEndpoint  = "https://api.openai.com/v1/embeddings"
 )
+
+type OpenAIClient struct {
+	openaiConfig config.OpenAIConfig
+}
+
+func NewOpenAIClient(openaiConfig config.OpenAIConfig) *OpenAIClient {
+	return &OpenAIClient{
+		openaiConfig: openaiConfig,
+	}
+}
 
 // Content represents content in a message
 type Content struct {
@@ -30,16 +43,16 @@ type Message struct {
 	Content []Content `json:"content"`
 }
 
-// Payload represents the payload sent to the OpenAI API
-type Payload struct {
+// CompletionsPayload represents the payload sent to the OpenAI API
+type CompletionsPayload struct {
 	Model       string    `json:"model"`
 	Messages    []Message `json:"messages"`
 	Temperature float32   `json:"temperature"`
 	MaxTokens   int       `json:"max_tokens"`
 }
 
-// Response represents the structure of the response from the OpenAI API
-type Response struct {
+// CompletionsResponse represents the structure of the response from the OpenAI API
+type CompletionsResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
@@ -47,10 +60,8 @@ type Response struct {
 	} `json:"choices"`
 }
 
-// CallAPI calls the OpenAI API
-func CallAPI(
-	payload Payload,
-	apiKey string) (*Response, error) {
+// GenerateCompletions calls the OpenAI Completions API
+func (c OpenAIClient) GenerateCompletions(payload CompletionsPayload) (*CompletionsResponse, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling payload: %w", err)
@@ -58,10 +69,10 @@ func CallAPI(
 
 	headers := map[string]string{
 		"Content-Type":  "application/json",
-		"Authorization": "Bearer " + apiKey,
+		"Authorization": "Bearer " + c.openaiConfig.Key,
 	}
 
-	request, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(payloadBytes))
+	request, err := http.NewRequest("POST", completionsEndpoint, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -82,10 +93,65 @@ func CallAPI(
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
-	var openAIResponse Response
+	var openAIResponse CompletionsResponse
 	if err := json.Unmarshal(responseData, &openAIResponse); err != nil {
 		return nil, fmt.Errorf("error unmarshalling response: %w", err)
 	}
 
 	return &openAIResponse, nil
+}
+
+// EmbeddingsPayload represents the payload sent to the OpenAI Embeddings API
+type EmbeddingsPayload struct {
+	Model string   `json:"model"`
+	Input []string `json:"input"`
+}
+
+// EmbeddingsResponse represents the structure of the response from the OpenAI Embeddings API
+type EmbeddingsResponse struct {
+	Data []struct {
+		Embedding []float32 `json:"embedding"`
+	} `json:"data"`
+}
+
+// GenerateEmbeddings calls the OpenAI Embeddings API
+func (c OpenAIClient) GenerateEmbeddings(
+	payload EmbeddingsPayload) (*EmbeddingsResponse, error) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling payload: %w", err)
+	}
+
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Authorization": "Bearer " + c.openaiConfig.Key,
+	}
+
+	request, err := http.NewRequest("POST", embeddingsEndpoint, bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	for key, value := range headers {
+		request.Header.Set(key, value)
+	}
+
+	client := &http.Client{}
+	response, err := client.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("error sending request: %w", err)
+	}
+	defer response.Body.Close()
+
+	responseData, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	var embeddingsResponse EmbeddingsResponse
+	if err := json.Unmarshal(responseData, &embeddingsResponse); err != nil {
+		return nil, fmt.Errorf("error unmarshalling response: %w", err)
+	}
+
+	return &embeddingsResponse, nil
 }
