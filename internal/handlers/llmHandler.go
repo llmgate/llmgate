@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/llmgate/llmgate/internal/utils"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/pinecone"
 	"github.com/llmgate/llmgate/superbase"
@@ -36,25 +37,25 @@ func (h *LLMHandler) LLMRequest(c *gin.Context) {
 	projectName := c.Param("projectName")
 	postfixUrl := c.Param("postfixUrl")
 	if projectName == "" || postfixUrl == "" {
-		h.respondWithError(c, http.StatusBadRequest, "bad request")
+		utils.ProcessGenericBadRequest(c)
 		return
 	}
 
 	endpointDetails, err := h.getEndpointDetails(projectName, postfixUrl)
 	if err != nil {
-		h.respondWithError(c, http.StatusBadRequest, "bad request")
+		utils.ProcessGenericBadRequest(c)
 		return
 	}
 
 	var openaiRequest openai.CompletionsPayload
 	if err := c.ShouldBindJSON(&openaiRequest); err != nil {
-		h.respondWithError(c, http.StatusBadRequest, "Invalid request payload")
+		utils.ProcessGenericBadRequest(c)
 		return
 	}
 
 	ragContextsStr, err := h.getRagContexts(&openaiRequest, endpointDetails.EndpointId)
 	if err != nil {
-		h.respondWithError(c, http.StatusInternalServerError, err.Error())
+		utils.ProcessGenericInternalError(c)
 		return
 	}
 
@@ -62,7 +63,7 @@ func (h *LLMHandler) LLMRequest(c *gin.Context) {
 
 	openAIResponse, err := h.generateOpenAIResponse(endpointDetails.LlmProvider, openaiRequest)
 	if err != nil {
-		h.respondWithError(c, http.StatusInternalServerError, "something went wrong. please try again!")
+		utils.ProcessGenericInternalError(c)
 		return
 	}
 
@@ -197,8 +198,4 @@ func (h *LLMHandler) applyEndpointOverrides(endpointDetails *superbase.Endpoint,
 	if endpointOverrides.PostPrompt != nil {
 		endpointDetails.PostPrompt = endpointOverrides.PostPrompt
 	}
-}
-
-func (h *LLMHandler) respondWithError(c *gin.Context, code int, message string) {
-	c.JSON(code, gin.H{"error": message})
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/llmgate/llmgate/internal/utils"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/pinecone"
 	"github.com/llmgate/llmgate/superbase"
@@ -41,33 +42,33 @@ func NewIngestionHandler(
 func (h *IngestionHandler) IngestData(c *gin.Context) {
 	endpointId := c.Param("endpointId")
 	if endpointId == "" {
-		h.respondWithError(c, http.StatusBadRequest, "bad request")
+		utils.ProcessGenericBadRequest(c)
 		return
 	}
 
 	filePath, err := h.saveUploadedFile(c)
 	if err != nil {
-		h.respondWithError(c, http.StatusBadRequest, "bad request")
+		utils.ProcessGenericBadRequest(c)
 		return
 	}
 	defer os.Remove(filePath)
 
 	_, err = h.storeIngestionRecord(endpointId)
 	if err != nil {
-		h.respondWithError(c, http.StatusInternalServerError, "something went wrong. please try again!")
+		utils.ProcessGenericInternalError(c)
 		return
 	}
 
 	content, err := h.readFileContent(filePath)
 	if err != nil {
-		h.respondWithError(c, http.StatusInternalServerError, "something went wrong. please try again!")
+		utils.ProcessGenericInternalError(c)
 		return
 	}
 
 	chunks := splitIntoChunks(content, chunkSize)
 	for _, chunk := range chunks {
 		if err := h.processChunk(chunk, endpointId); err != nil {
-			h.respondWithError(c, http.StatusInternalServerError, err.Error())
+			utils.ProcessGenericInternalError(c)
 			return
 		}
 	}
@@ -115,10 +116,6 @@ func (h *IngestionHandler) processChunk(chunk, endpointId string) error {
 	}
 
 	return h.pineconeClient.Store(embedding.Data[0].Embedding, endpointId, chunk)
-}
-
-func (h *IngestionHandler) respondWithError(c *gin.Context, code int, message string) {
-	c.JSON(code, gin.H{"error": message})
 }
 
 func splitIntoChunks(text string, size int) []string {
