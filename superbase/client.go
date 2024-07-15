@@ -48,8 +48,8 @@ type UsageLog struct {
 	UsageId              string  `json:"usage_id,omitempty"`
 	LlmProvider          string  `json:"llm_provider"`
 	LlmModel             string  `json:"llm_model"`
-	PromptTokensUsed     *int    `json:"prompt_tokens_used,omitempty"`
-	CompletionTokensUsed *int    `json:"completion_tokens_used,omitempty"`
+	PromptTokensUsed     *int32  `json:"prompt_tokens_used,omitempty"`
+	CompletionTokensUsed *int32  `json:"completion_tokens_used,omitempty"`
 	CreatedAt            *string `json:"created_at,omitempty"`
 	EndpointId           string  `json:"endpoint_id"`
 	ProjectName          string  `json:"project_name"`

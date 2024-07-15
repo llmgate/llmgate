@@ -4,6 +4,8 @@ clients:
   openai:
     key: 'some-key'
     embeddingmodal: 'some-key'
+  gemini:
+    key: 'some-key'
   superbase:
     url: 'some-key'
     key: 'some-key'

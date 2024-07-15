@@ -19,11 +19,11 @@ type ClientsConfig struct {
 	OpenAI    OpenAIConfig
 	Superbase SuperbaseConfig
 	Pinecone  PineconeConfig
+	Gemini    GeminiConfig
 }
 
 type GeminiConfig struct {
-	Key   string
-	Model string
+	Key string
 }
 
 type OpenAIConfig struct {

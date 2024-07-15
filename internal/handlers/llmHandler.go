@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/llmgate/llmgate/gemini"
 	"github.com/llmgate/llmgate/internal/utils"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/pinecone"
@@ -16,6 +17,7 @@ import (
 
 type LLMHandler struct {
 	openaiClient    openai.OpenAIClient
+	geminiClient    gemini.GeminiClient
 	pineconeClient  pinecone.PineconeClient
 	superbaseClient superbase.SupabaseClient
 	embeddingModal  string
@@ -23,11 +25,13 @@ type LLMHandler struct {
 
 func NewLLMHandler(
 	openaiClient openai.OpenAIClient,
+	geminiClient gemini.GeminiClient,
 	pineconeClient pinecone.PineconeClient,
 	superbaseClient superbase.SupabaseClient,
 	embeddingModal string) *LLMHandler {
 	return &LLMHandler{
 		openaiClient:    openaiClient,
+		geminiClient:    geminiClient,
 		pineconeClient:  pineconeClient,
 		superbaseClient: superbaseClient,
 		embeddingModal:  embeddingModal,
@@ -129,6 +133,8 @@ func (h *LLMHandler) extractRequestContents(openaiRequest *openai.CompletionsPay
 func (h *LLMHandler) generateOpenAIResponse(llmProvider string, openaiRequest openai.CompletionsPayload) (*openai.CompletionsResponse, error) {
 	if llmProvider == "OpenAI" {
 		return h.openaiClient.GenerateCompletions(openaiRequest)
+	} else if llmProvider == "Gemini" {
+		return h.geminiClient.GenerateCompletions(openaiRequest)
 	}
 	return nil, fmt.Errorf("unsupported llm provider")
 }

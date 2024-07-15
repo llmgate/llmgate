@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/llmgate/llmgate/gemini"
 	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/internal/handlers"
 	"github.com/llmgate/llmgate/openai"
@@ -32,6 +33,9 @@ func main() {
 	// Initialize OpenAI Client
 	openaiClient := openai.NewOpenAIClient(config.Clients.OpenAI)
 
+	// Initialize Gemini Client
+	geminiClient := gemini.NewGeminiClient(config.Clients.Gemini)
+
 	// Initialize Pinecone Client
 	pineconeClient := pinecone.NewPineconeClient(config.Clients.Pinecone)
 
@@ -43,7 +47,7 @@ func main() {
 	ingestionHandler :=
 		handlers.NewIngestionHandler(*openaiClient, *pineconeClient, *superbaseClient, config.Clients.OpenAI.EmbeddingModal)
 	router.POST("ingest/:endpointId", ingestionHandler.IngestData)
-	llmHandler := handlers.NewLLMHandler(*openaiClient, *pineconeClient, *superbaseClient, config.Clients.OpenAI.EmbeddingModal)
+	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *pineconeClient, *superbaseClient, config.Clients.OpenAI.EmbeddingModal)
 	router.POST("llm/:projectName/:postfixUrl", llmHandler.LLMRequest)
 	router.Run(fmt.Sprintf(":%d", config.Server.Port))
 }

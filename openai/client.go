@@ -66,9 +66,9 @@ type CompletionsResponse struct {
 		FinishReason *string `json:"finish_reason,omitempty"`
 	} `json:"choices,omitempty"`
 	Usage *struct {
-		PromptTokens     *int `json:"prompt_tokens,omitempty"`
-		CompletionTokens *int `json:"completion_tokens,omitempty"`
-		TotalTokens      *int `json:"total_tokens,omitempty"`
+		PromptTokens     *int32 `json:"prompt_tokens,omitempty"`
+		CompletionTokens *int32 `json:"completion_tokens,omitempty"`
+		TotalTokens      *int32 `json:"total_tokens,omitempty"`
 	} `json:"usage,omitempty"`
 }
 
