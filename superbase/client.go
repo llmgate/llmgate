@@ -44,6 +44,17 @@ type Ingestion struct {
 	EndpointId  string  `json:"endpoint_id"`
 }
 
+type UsageLog struct {
+	UsageId              string  `json:"usage_id,omitempty"`
+	LlmProvider          string  `json:"llm_provider"`
+	LlmModel             string  `json:"llm_model"`
+	PromptTokensUsed     *int    `json:"prompt_tokens_used,omitempty"`
+	CompletionTokensUsed *int    `json:"completion_tokens_used,omitempty"`
+	CreatedAt            *string `json:"created_at,omitempty"`
+	EndpointId           string  `json:"endpoint_id"`
+	ProjectName          string  `json:"project_name"`
+}
+
 type SupabaseClient struct {
 	superbaseConfig config.SuperbaseConfig
 }
@@ -196,4 +207,38 @@ func (s *SupabaseClient) GetIngestions(endpointId string) ([]Ingestion, error) {
 	}
 
 	return ingestions, nil
+}
+
+func (s *SupabaseClient) LogUsage(usageLog UsageLog) error {
+	apiURL := fmt.Sprintf("%s/rest/v1/%s",
+		s.superbaseConfig.Url, s.superbaseConfig.UsageLogsTableName)
+
+	data, err := json.Marshal(usageLog)
+	if err != nil {
+		return fmt.Errorf("failed to marshal usage log: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return fmt.Errorf("failed to log usage, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	return nil
 }

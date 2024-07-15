@@ -10,6 +10,7 @@ clients:
     endpointstablename: 'some-key'
     endpointoverridestablename: 'some-key'
     ingestionstablename: 'some-key'
+    usagelogstablename: 'some-key'
   pinecone:
     key: 'some-key'
     indexhost: 'some-key'

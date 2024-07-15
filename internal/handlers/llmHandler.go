@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"github.com/llmgate/llmgate/internal/utils"
 	"github.com/llmgate/llmgate/openai"
@@ -65,6 +66,19 @@ func (h *LLMHandler) LLMRequest(c *gin.Context) {
 	if err != nil {
 		utils.ProcessGenericInternalError(c)
 		return
+	}
+
+	err = h.superbaseClient.LogUsage(superbase.UsageLog{
+		UsageId:              uuid.New().String(),
+		LlmProvider:          endpointDetails.LlmProvider,
+		LlmModel:             endpointDetails.LlmModel,
+		PromptTokensUsed:     openAIResponse.Usage.PromptTokens,
+		CompletionTokensUsed: openAIResponse.Usage.CompletionTokens,
+		EndpointId:           endpointDetails.EndpointId,
+		ProjectName:          projectName,
+	})
+	if err != nil {
+		println(err.Error())
 	}
 
 	c.JSON(http.StatusOK, openAIResponse)

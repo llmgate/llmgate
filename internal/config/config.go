@@ -37,6 +37,7 @@ type SuperbaseConfig struct {
 	EndpointsTableName         string
 	EndpointOverridesTableName string
 	IngestionsTableName        string
+	UsageLogsTableName         string
 }
 
 type PineconeConfig struct {

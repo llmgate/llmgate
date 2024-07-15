@@ -51,13 +51,25 @@ type CompletionsPayload struct {
 	MaxTokens   int       `json:"max_tokens"`
 }
 
-// CompletionsResponse represents the structure of the response from the OpenAI API
+// CompletionsResponse represents the response from the OpenAI completion endpoint.
 type CompletionsResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-	} `json:"choices"`
+	ID      *string `json:"id,omitempty"`
+	Object  *string `json:"object,omitempty"`
+	Created *int64  `json:"created,omitempty"`
+	Model   *string `json:"model,omitempty"`
+	Choices *[]struct {
+		Index   *int `json:"index,omitempty"`
+		Message *struct {
+			Role    *string `json:"role,omitempty"`
+			Content *string `json:"content,omitempty"`
+		} `json:"message,omitempty"`
+		FinishReason *string `json:"finish_reason,omitempty"`
+	} `json:"choices,omitempty"`
+	Usage *struct {
+		PromptTokens     *int `json:"prompt_tokens,omitempty"`
+		CompletionTokens *int `json:"completion_tokens,omitempty"`
+		TotalTokens      *int `json:"total_tokens,omitempty"`
+	} `json:"usage,omitempty"`
 }
 
 // GenerateCompletions calls the OpenAI Completions API
