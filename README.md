@@ -10,30 +10,6 @@ LLM Gate is an open-source proxy service designed to facilitate the use of vario
 - **Mock Service:** Includes a mock service that simulates LLM responses, helping reduce development costs and bypass the need for API keys during initial testing.
 - **Open Source:** Free to use and modify, making it ideal for community-driven enhancements or personal projects.
 
-## Getting Started
-
-### Prerequisites
-
-- Go 1.16+ for building and running the service.
-- Internet access is required for reaching OpenAI or Gemini APIs, but not necessary for using the mock service.
-
-### Installation
-
-To get started with the LLM Gate, clone the repository and build the service:
-
-```bash
-git clone https://github.com/llmgate/llmgate.git
-cd llmgate
-go build
-```
-
-### Running the Service
-To start the service locally, run:
-```bash
-./llmgate
-```
-The service will be available at `http://localhost:8080`.
-
 ## Usage
 
 ### Making Requests
@@ -93,6 +69,30 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
     }
 }
 ```
+
+## Running Locally
+
+### Prerequisites
+
+- Go 1.16+ for building and running the service.
+- Internet access is required for reaching OpenAI or Gemini APIs, but not necessary for using the mock service.
+
+### Installation
+
+To get started with the LLM Gate, clone the repository and build the service:
+
+```bash
+git clone https://github.com/llmgate/llmgate.git
+cd llmgate
+go build
+```
+
+### Running the Service
+To start the service locally, run:
+```bash
+./llmgate
+```
+The service will be available at `http://localhost:8080`.
 
 ## Contributing
 Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are greatly appreciated.
