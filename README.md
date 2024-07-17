@@ -22,7 +22,7 @@ LLM Gate is an open-source proxy service designed to facilitate the use of vario
 To get started with the LLM Gate, clone the repository and build the service:
 
 ```bash
-git clone https://github.com/yourgithub/llmgate.git
+git clone https://github.com/llmgate/llmgate.git
 cd llmgate
 go build
 ```
