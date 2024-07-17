@@ -7,42 +7,11 @@ import (
 )
 
 type Config struct {
-	Server  ServerConfig
-	Clients ClientsConfig
+	Server ServerConfig
 }
 
 type ServerConfig struct {
 	Port int
-}
-
-type ClientsConfig struct {
-	OpenAI    OpenAIConfig
-	Superbase SuperbaseConfig
-	Pinecone  PineconeConfig
-	Gemini    GeminiConfig
-}
-
-type GeminiConfig struct {
-	Key string
-}
-
-type OpenAIConfig struct {
-	Key            string
-	EmbeddingModal string
-}
-
-type SuperbaseConfig struct {
-	Url                        string
-	Key                        string
-	EndpointsTableName         string
-	EndpointOverridesTableName string
-	IngestionsTableName        string
-	UsageLogsTableName         string
-}
-
-type PineconeConfig struct {
-	Key       string
-	IndexHost string
 }
 
 func LoadConfig(configName string) (*Config, error) {

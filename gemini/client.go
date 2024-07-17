@@ -8,24 +8,20 @@ import (
 	"github.com/google/generative-ai-go/genai"
 	"google.golang.org/api/option"
 
-	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/openai"
 )
 
 type GeminiClient struct {
-	geminiConfig config.GeminiConfig
 }
 
-func NewGeminiClient(geminiConfig config.GeminiConfig) *GeminiClient {
-	return &GeminiClient{
-		geminiConfig: geminiConfig,
-	}
+func NewGeminiClient() *GeminiClient {
+	return &GeminiClient{}
 }
 
 // GenerateCompletions calls the OpenAI Completions API
-func (c GeminiClient) GenerateCompletions(payload openai.CompletionsPayload) (*openai.CompletionsResponse, error) {
+func (c GeminiClient) GenerateCompletions(payload openai.CompletionsPayload, apiKey string) (*openai.CompletionsResponse, error) {
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, option.WithAPIKey(c.geminiConfig.Key))
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
 		return nil, err
 	}
