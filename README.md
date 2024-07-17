@@ -1,8 +1,8 @@
-# LLM Gate Proxy Service
+# LLMGate Proxy for LLMs
 
 ## Introduction
 
-LLM Gate is an open-source proxy service designed to facilitate the use of various language learning models (LLMs) including OpenAI, Gemini, and a mock service for testing. The service accepts requests in the OpenAI format and allows seamless integration and switching between different LLM providers. It's particularly useful for developers looking to integrate LLM features without directly hitting provider APIs during development and testing phases.
+LLMGate is an open-source proxy service designed to facilitate the use of various language learning models (LLMs) including OpenAI, Gemini, and a mock service for testing. The service accepts requests in the OpenAI format and allows seamless integration and switching between different LLM providers. It's particularly useful for developers looking to integrate LLM features without directly hitting provider APIs during development and testing phases.
 
 ## Features
 
