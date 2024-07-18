@@ -13,7 +13,7 @@ LLMGate is an open-source proxy service designed to facilitate the use of variou
 ## Usage
 
 ### Making Completions Requests
-To make Completions requests, you need to specify the provider and send a JSON payload in the OpenAI format.
+To make requests to the LLM Gate, you need to specify the provider and send a JSON payload in the OpenAI format.
 
 #### Endpoint
 ```bash
@@ -75,8 +75,8 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
 }
 ```
 
-### Making Simplified Completion Requests
-There are many times you just want LLM to process simpler requests without configuring many things. To make a simpler completion requests, you need to specify the provider and send a much simpler JSON payload.
+### Making Simplified Completions Requests
+To make simpler requests to the LLM Gate, you need to specify the provider and send a JSON payload in following format.
 
 #### Endpoint
 ```bash
