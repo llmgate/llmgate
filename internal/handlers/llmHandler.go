@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -62,6 +63,136 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, openAIResponse)
+}
+
+type SimplifiedCompletionsPayload struct {
+	SystemPrePrompt    *string `json:"systemPrePromp,omitempty"`
+	UserPrompt         string  `json:"userPrompt"`
+	SystemPostPrompt   *string `json:"systemPostPrompt,omitempty"`
+	ResponseJsonSchema *string `json:"responseJsonSchema,omitempty"`
+	Model              string  `json:"model"`
+	Temperature        float32 `json:"temperature"`
+	MaxTokens          int     `json:"max_tokens"`
+}
+
+type SimplifiedCompletionsResponse struct {
+	Response string
+}
+
+func (h *LLMHandler) ProcessSimplifiedCompletions(c *gin.Context) {
+	llmProvider, _ := c.GetQuery("provider")
+	if llmProvider == "" {
+		// default
+		llmProvider = OpenAILLMProvider
+	} else if !isValidProvider(llmProvider) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid llm provider"})
+		return
+	}
+
+	apiKey := c.GetHeader("key")
+	if apiKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
+	}
+
+	var simplifiedCompletionsPayload SimplifiedCompletionsPayload
+	if err := c.ShouldBindJSON(&simplifiedCompletionsPayload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if simplifiedCompletionsPayload.UserPrompt == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userPrompt can not be empty"})
+		return
+	}
+
+	// Pre
+	messages := make([]openai.Message, 0)
+	if simplifiedCompletionsPayload.SystemPrePrompt != nil && *simplifiedCompletionsPayload.SystemPrePrompt != "" {
+		messages = append(messages, openai.Message{
+			Role: "system",
+			Content: []openai.Content{
+				{
+					Type: "text",
+					Text: *simplifiedCompletionsPayload.SystemPrePrompt,
+				},
+			},
+		})
+	}
+	// Prompt
+	messages = append(messages, openai.Message{
+		Role: "user",
+		Content: []openai.Content{
+			{
+				Type: "text",
+				Text: *&simplifiedCompletionsPayload.UserPrompt,
+			},
+		},
+	})
+	// Post
+	if simplifiedCompletionsPayload.SystemPostPrompt != nil && *simplifiedCompletionsPayload.SystemPostPrompt != "" {
+		messages = append(messages, openai.Message{
+			Role: "system",
+			Content: []openai.Content{
+				{
+					Type: "text",
+					Text: *simplifiedCompletionsPayload.SystemPostPrompt,
+				},
+			},
+		})
+	}
+	// schema
+	if simplifiedCompletionsPayload.ResponseJsonSchema != nil && *simplifiedCompletionsPayload.ResponseJsonSchema != "" {
+		messages = append(messages, openai.Message{
+			Role: "system",
+			Content: []openai.Content{
+				{
+					Type: "text",
+					Text: "Your response should be in this format: " + *simplifiedCompletionsPayload.ResponseJsonSchema,
+				},
+			},
+		})
+	}
+	openaiRequest := openai.CompletionsPayload{
+		Model:       simplifiedCompletionsPayload.Model,
+		Messages:    messages,
+		Temperature: simplifiedCompletionsPayload.Temperature,
+		MaxTokens:   simplifiedCompletionsPayload.MaxTokens,
+	}
+
+	openAIResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if openAIResponse.Choices == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "empty response"})
+		return
+	}
+
+	responseStr := ""
+	for _, choice := range *openAIResponse.Choices {
+		responseStr += *choice.Message.Content
+	}
+
+	if responseStr == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "empty response"})
+		return
+	}
+
+	if simplifiedCompletionsPayload.ResponseJsonSchema != nil {
+		var jsonResponse map[string]interface{}
+		err := json.Unmarshal([]byte(responseStr), &jsonResponse)
+		if err != nil {
+			println(responseStr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get json response from llm"})
+			return
+		}
+		c.JSON(http.StatusOK, jsonResponse)
+		return
+	}
+
+	c.String(http.StatusOK, responseStr)
 }
 
 func isValidProvider(provider string) bool {

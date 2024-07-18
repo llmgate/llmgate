@@ -12,12 +12,17 @@ LLM Gate is an open-source proxy service designed to facilitate the use of vario
 
 ## Usage
 
-### Making Requests
+### Making Completions Requests
 To make requests to the LLM Gate, you need to specify the provider and send a JSON payload in the OpenAI format.
 
 #### Endpoint
 ```bash
 POST https://llmgate.uc.r.appspot.com/completions?provider=Mock
+```
+
+#### Query Param
+```
+provider=<OpenAI/Gemini/Mock>
 ```
 
 #### Header
@@ -67,6 +72,46 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
         "completion_tokens": 9,
         "total_tokens": 17
     }
+}
+```
+
+### Making Simplified Completions Requests
+To make simpler requests to the LLM Gate, you need to specify the provider and send a JSON payload in following format.
+
+#### Endpoint
+```bash
+POST https://llmgate.uc.r.appspot.com/simplifiedCompletions?provider=OpenAI
+```
+
+#### Query Param
+```
+provider=<OpenAI/Gemini>
+```
+
+#### Header
+```bash
+Content-Type: application/json
+key: <Your-OpenAI-Key/Gemini-Key>
+```
+
+#### Request Payload Example
+```bash
+{
+	"systemPrePromp": "you are a bot to help with finding best software",
+	"userPrompt": "which is best: msft excel vs google sheet?",
+	"systemPostPrompt": "Provide best assumption. Don't say I don't know, it depends etc.",
+	"responseJsonSchema": "{\"reponse\":\"string value of best software\", \"reason\":\"string value of why it is best\"}",
+	"model": "gpt-4o",
+	"temperature": 0.6,
+	"max_tokens": 500
+}
+```
+
+#### Response Example
+```bash
+{
+    "reason": "Microsoft Excel offers more advanced features, better performance with large datasets, and extensive support for complex functions and macros. It is widely used in professional settings for its robust data analysis and visualization capabilities.",
+    "response": "Microsoft Excel"
 }
 ```
 
