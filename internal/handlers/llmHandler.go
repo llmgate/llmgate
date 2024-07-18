@@ -184,6 +184,7 @@ func (h *LLMHandler) ProcessSimplifiedCompletions(c *gin.Context) {
 		var jsonResponse map[string]interface{}
 		err := json.Unmarshal([]byte(responseStr), &jsonResponse)
 		if err != nil {
+			println(responseStr)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get json response from llm"})
 			return
 		}
