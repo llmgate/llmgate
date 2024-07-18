@@ -42,7 +42,6 @@ func main() {
 	router.GET("/health", healthHandler.IsHealthy)
 	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient)
 	router.POST("/completions", llmHandler.ProcessCompletions)
-	router.POST("/simplifiedCompletions", llmHandler.ProcessSimplifiedCompletions)
 
 	router.Run(fmt.Sprintf(":%d", config.Server.Port))
 }
