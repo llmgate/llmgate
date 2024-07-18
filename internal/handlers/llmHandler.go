@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 
@@ -182,7 +183,8 @@ func (h *LLMHandler) ProcessSimplifiedCompletions(c *gin.Context) {
 
 	if simplifiedCompletionsPayload.ResponseJsonSchema != nil {
 		var jsonResponse map[string]interface{}
-		err := json.Unmarshal([]byte(responseStr), &jsonResponse)
+		cleanedResponseStr := cleanJsonResponse(responseStr)
+		err := json.Unmarshal([]byte(cleanedResponseStr), &jsonResponse)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get json response from llm"})
 			return
@@ -192,6 +194,19 @@ func (h *LLMHandler) ProcessSimplifiedCompletions(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, responseStr)
+}
+
+func cleanJsonResponse(response string) string {
+	// Define a regular expression to match backticks and json tags
+	re := regexp.MustCompile("```json|```")
+
+	// Remove the matched parts
+	cleanedResponse := re.ReplaceAllString(response, "")
+
+	// Trim leading and trailing whitespace
+	cleanedResponse = regexp.MustCompile(`^\s+|\s+$`).ReplaceAllString(cleanedResponse, "")
+
+	return cleanedResponse
 }
 
 func isValidProvider(provider string) bool {
