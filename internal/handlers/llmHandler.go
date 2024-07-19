@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	openaigo "github.com/sashabaranov/go-openai"
 
 	"github.com/llmgate/llmgate/gemini"
 	"github.com/llmgate/llmgate/mockllm"
@@ -49,7 +50,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 	}
 
-	var openaiRequest openai.CompletionsPayload
+	var openaiRequest openaigo.ChatCompletionRequest
 	if err := c.ShouldBindJSON(&openaiRequest); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -75,8 +76,8 @@ func isValidProvider(provider string) bool {
 
 func (h *LLMHandler) generateOpenAIResponse(
 	llmProvider string,
-	openaiRequest openai.CompletionsPayload,
-	apiKey string) (*openai.CompletionsResponse, error) {
+	openaiRequest openaigo.ChatCompletionRequest,
+	apiKey string) (*openaigo.ChatCompletionResponse, error) {
 	switch llmProvider {
 	case OpenAILLMProvider:
 		return h.openaiClient.GenerateCompletions(openaiRequest, apiKey)

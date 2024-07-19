@@ -6,20 +6,20 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	openaigo "github.com/sashabaranov/go-openai"
 	"google.golang.org/api/option"
-
-	"github.com/llmgate/llmgate/openai"
 )
 
 type GeminiClient struct {
 }
 
+// NewGeminiClient initializes a new GeminiClient with the provided API key.
 func NewGeminiClient() *GeminiClient {
 	return &GeminiClient{}
 }
 
 // GenerateCompletions calls the OpenAI Completions API
-func (c GeminiClient) GenerateCompletions(payload openai.CompletionsPayload, apiKey string) (*openai.CompletionsResponse, error) {
+func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest, apiKey string) (*openaigo.ChatCompletionResponse, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -33,11 +33,7 @@ func (c GeminiClient) GenerateCompletions(payload openai.CompletionsPayload, api
 
 	for _, message := range payload.Messages {
 		for _, content := range message.Content {
-			if content.Type == "text" {
-				prompt = append(prompt, genai.Text(content.Text))
-			}
-			// TODO: support images
-			// genai.ImageData("jpeg", *imageBytes)
+			prompt = append(prompt, genai.Text(content))
 		}
 	}
 
@@ -51,78 +47,45 @@ func (c GeminiClient) GenerateCompletions(payload openai.CompletionsPayload, api
 	return &openaiCompletionsResponse, nil
 }
 
-// Convert Gemini response to OpenAI response
-func convertGeminiToOpenAI(geminiResp genai.GenerateContentResponse) openai.CompletionsResponse {
-	created := time.Now().Unix()
-	objectType := "text_completion"
+// Convert Gemini response to OpenAI response with improved handling and structure
+func convertGeminiToOpenAI(geminiResp genai.GenerateContentResponse) openaigo.ChatCompletionResponse {
+	choices := make([]openaigo.ChatCompletionChoice, 0)
+	for _, candidate := range geminiResp.Candidates {
+		choice := openaigo.ChatCompletionChoice{
+			Index: int(candidate.Index),
+			Message: openaigo.ChatCompletionMessage{
+				Role:    string(candidate.Content.Role),                // assuming Role is directly translatable
+				Content: fmt.Sprintf("%v", candidate.Content.Parts[0]), // Simplified mapping, check if Parts needs to be individually converted
+			},
+			FinishReason: openaigo.FinishReason(mapFinishReason(candidate.FinishReason)), // Direct conversion using a mapping function
+		}
+		choices = append(choices, choice)
+	}
 
-	openAIResp := openai.CompletionsResponse{
-		ID:      nil, // Assuming no direct mapping
-		Object:  &objectType,
-		Created: &created,
-		Model:   nil, // Assuming no direct mapping
-		Choices: &[]struct {
-			Index   *int `json:"index,omitempty"`
-			Message *struct {
-				Role    *string `json:"role,omitempty"`
-				Content *string `json:"content,omitempty"`
-			} `json:"message,omitempty"`
-			FinishReason *string `json:"finish_reason,omitempty"`
-		}{},
-		Usage: &struct {
-			PromptTokens     *int32 `json:"prompt_tokens,omitempty"`
-			CompletionTokens *int32 `json:"completion_tokens,omitempty"`
-			TotalTokens      *int32 `json:"total_tokens,omitempty"`
-		}{
-			PromptTokens:     &geminiResp.UsageMetadata.PromptTokenCount,
-			CompletionTokens: &geminiResp.UsageMetadata.CandidatesTokenCount,
-			TotalTokens:      &geminiResp.UsageMetadata.TotalTokenCount,
+	return openaigo.ChatCompletionResponse{
+		ID:      "", // Assuming ID does not map directly
+		Object:  "text_completion",
+		Created: time.Now().Unix(),
+		Model:   "", // Assuming Model does not map directly
+		Choices: choices,
+		Usage: openaigo.Usage{ // Correcting structure
+			PromptTokens:     int(geminiResp.UsageMetadata.PromptTokenCount), // Ensure correct type matching
+			CompletionTokens: int(geminiResp.UsageMetadata.CandidatesTokenCount),
+			TotalTokens:      int(geminiResp.UsageMetadata.TotalTokenCount),
 		},
 	}
-
-	for _, candidate := range geminiResp.Candidates {
-		index := int(candidate.Index)
-		role := candidate.Content.Role
-		finishReason := mapFinishReason(candidate.FinishReason)
-		for _, part := range candidate.Content.Parts {
-			content := fmt.Sprintf("%s", part)
-			choice := struct {
-				Index   *int `json:"index,omitempty"`
-				Message *struct {
-					Role    *string `json:"role,omitempty"`
-					Content *string `json:"content,omitempty"`
-				} `json:"message,omitempty"`
-				FinishReason *string `json:"finish_reason,omitempty"`
-			}{
-				Index: &index,
-				Message: &struct {
-					Role    *string `json:"role,omitempty"`
-					Content *string `json:"content,omitempty"`
-				}{
-					Role:    &role,
-					Content: &content,
-				},
-				FinishReason: &finishReason,
-			}
-
-			*openAIResp.Choices = append(*openAIResp.Choices, choice)
-		}
-	}
-
-	return openAIResp
 }
 
+// Map FinishReason from genai to openaigo
 func mapFinishReason(reason genai.FinishReason) string {
 	switch reason {
 	case genai.FinishReasonStop:
 		return "stop"
 	case genai.FinishReasonMaxTokens:
-		return "max_tokens"
+		return "length"
 	case genai.FinishReasonSafety:
-		return "safety"
-	case genai.FinishReasonRecitation:
-		return "recitation"
+		return "content_filter"
 	default:
-		return "other"
+		return "null" // Default to 'null' for unspecified cases
 	}
 }
