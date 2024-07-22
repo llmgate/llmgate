@@ -35,6 +35,9 @@ func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest
 	prompt := make([]genai.Part, 0)
 
 	for _, message := range payload.Messages {
+		for _, content := range message.Content {
+			prompt = append(prompt, genai.Text(content))
+		}
 		for _, content := range message.MultiContent {
 			if content.Type == "text" {
 				prompt = append(prompt, genai.Text(content.Text))
