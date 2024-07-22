@@ -2,7 +2,9 @@ package gemini
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
@@ -33,8 +35,33 @@ func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest
 	prompt := make([]genai.Part, 0)
 
 	for _, message := range payload.Messages {
-		for _, content := range message.Content {
-			prompt = append(prompt, genai.Text(content))
+		for _, content := range message.MultiContent {
+			if content.Type == "text" {
+				prompt = append(prompt, genai.Text(content.Text))
+			} else if content.Type == "image_url" {
+				// Parse the data URI
+				parts := strings.Split(content.ImageURL.URL, ",")
+				if len(parts) != 2 {
+					return nil, fmt.Errorf("invalid data URI format")
+				}
+
+				// Extract the image format
+				formatParts := strings.Split(parts[0], ";")
+				if len(formatParts) != 2 {
+					return nil, fmt.Errorf("invalid data URI format")
+				}
+				format := strings.TrimPrefix(formatParts[0], "data:image/")
+
+				// Decode the base64 data
+				imageData, err := base64.StdEncoding.DecodeString(parts[1])
+				if err != nil {
+					return nil, fmt.Errorf("failed to decode base64 image: %v", err)
+				}
+
+				// Create the genai.ImageData
+				img := genai.ImageData(format, imageData)
+				prompt = append(prompt, img)
+			}
 		}
 	}
 
