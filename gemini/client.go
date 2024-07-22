@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
+	"github.com/llmgate/llmgate/models"
 	openaigo "github.com/sashabaranov/go-openai"
 	"google.golang.org/api/option"
 )
@@ -19,7 +20,7 @@ func NewGeminiClient() *GeminiClient {
 }
 
 // GenerateCompletions calls the OpenAI Completions API
-func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest, apiKey string) (*openaigo.ChatCompletionResponse, error) {
+func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest, apiKey string) (*models.ChatCompletionExtendedResponse, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -44,7 +45,7 @@ func (c GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest
 
 	openaiCompletionsResponse := convertGeminiToOpenAI(*geminiResponse)
 
-	return &openaiCompletionsResponse, nil
+	return c.toChatCompletionExtendedResponse(payload.Model, openaiCompletionsResponse), nil
 }
 
 // Convert Gemini response to OpenAI response with improved handling and structure
@@ -87,5 +88,12 @@ func mapFinishReason(reason genai.FinishReason) string {
 		return "content_filter"
 	default:
 		return "null" // Default to 'null' for unspecified cases
+	}
+}
+
+func (c GeminiClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {
+	return &models.ChatCompletionExtendedResponse{
+		ChatCompletionResponse: openAIResponse,
+		Cost:                   0,
 	}
 }

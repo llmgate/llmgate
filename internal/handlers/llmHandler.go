@@ -9,6 +9,7 @@ import (
 
 	"github.com/llmgate/llmgate/gemini"
 	"github.com/llmgate/llmgate/mockllm"
+	"github.com/llmgate/llmgate/models"
 	"github.com/llmgate/llmgate/openai"
 )
 
@@ -56,13 +57,17 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
-	openAIResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
+	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, openAIResponse)
+	if extendedResponse.Cost > 0 {
+		c.Header("LLM-Cost", fmt.Sprintf("$%f", extendedResponse.Cost))
+	}
+
+	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
 }
 
 func isValidProvider(provider string) bool {
@@ -77,7 +82,7 @@ func isValidProvider(provider string) bool {
 func (h *LLMHandler) generateOpenAIResponse(
 	llmProvider string,
 	openaiRequest openaigo.ChatCompletionRequest,
-	apiKey string) (*openaigo.ChatCompletionResponse, error) {
+	apiKey string) (*models.ChatCompletionExtendedResponse, error) {
 	switch llmProvider {
 	case OpenAILLMProvider:
 		return h.openaiClient.GenerateCompletions(openaiRequest, apiKey)

@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/llmgate/llmgate/models"
 	openaigo "github.com/sashabaranov/go-openai"
 )
 
@@ -16,7 +17,7 @@ func NewMockLLMClient() *MockLLMClient {
 }
 
 // GenerateCompletions calls the MockLLMClient Completions API
-func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionRequest) (*openaigo.ChatCompletionResponse, error) {
+func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionRequest) (*models.ChatCompletionExtendedResponse, error) {
 	// Define a list of possible content strings
 	contents := []openaigo.MessageContent{
 		{
@@ -55,9 +56,9 @@ func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 	if r < 0.01 { // Mock 1% failure case
 		return nil, errors.New("mock failure: service unavailable")
 	} else if r < 0.02 { // Mock 1% empty choices case
-		return &openaigo.ChatCompletionResponse{
+		return c.toChatCompletionExtendedResponse(payload.Model, openaigo.ChatCompletionResponse{
 			Choices: []openaigo.ChatCompletionChoice{},
-		}, nil
+		}), nil
 	} else if r < 0.03 { // Mock 1% finish_reason = "time"
 		id := "mock-id"
 		object := "mock-object"
@@ -70,7 +71,7 @@ func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 		completionTokens := int(rand.Intn(10) + 1) // Random number between 1 and 10
 		totalTokens := promptTokens + completionTokens
 
-		return &openaigo.ChatCompletionResponse{
+		return c.toChatCompletionExtendedResponse(payload.Model, openaigo.ChatCompletionResponse{
 			ID:      id,
 			Object:  object,
 			Created: created,
@@ -90,7 +91,7 @@ func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 				CompletionTokens: completionTokens,
 				TotalTokens:      totalTokens,
 			},
-		}, nil
+		}), nil
 	}
 
 	// 97% success case
@@ -105,7 +106,7 @@ func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 	completionTokens := int(rand.Intn(500) + 1) // Random number between 1 and 500
 	totalTokens := promptTokens + completionTokens
 
-	return &openaigo.ChatCompletionResponse{
+	return c.toChatCompletionExtendedResponse(payload.Model, openaigo.ChatCompletionResponse{
 		ID:      id,
 		Object:  object,
 		Created: created,
@@ -125,5 +126,12 @@ func (c MockLLMClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 			CompletionTokens: completionTokens,
 			TotalTokens:      totalTokens,
 		},
-	}, nil
+	}), nil
+}
+
+func (c MockLLMClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {
+	return &models.ChatCompletionExtendedResponse{
+		ChatCompletionResponse: openAIResponse,
+		Cost:                   0,
+	}
 }

@@ -45,7 +45,7 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
 }
 ```
 
-#### Response Example
+#### Response Body Example
 ```bash
 {
     "id": "chatcmpl-9ls0a7SKT5l1ew62hpYdtYRMesBON",
@@ -68,6 +68,11 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
         "total_tokens": 17
     }
 }
+```
+
+#### Response Header Example
+```bash
+Llm-Cost: $0.000017
 ```
 
 ## Running Locally
