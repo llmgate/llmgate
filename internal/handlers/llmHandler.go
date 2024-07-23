@@ -112,11 +112,10 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 		return
 	}
 
-	testCaseResults := make([]models.TestCaseResult, 0)
-
-	for _, testCase := range testCompletionsRequest.TestCases {
+	testProviderResults := make([]models.TestProviderResult, 0)
+	for _, testProvider := range testCompletionsRequest.TestProviders {
 		testResults := make([]models.TestResult, 0)
-		for _, testProvider := range testCompletionsRequest.TestProviders {
+		for _, testCase := range testCompletionsRequest.TestCases {
 			opanaiRequest := utils.ToChatCompletionRequestFromPrompt(
 				testCompletionsRequest.Prompt,
 				testCase.Question,
@@ -137,22 +136,25 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 			answer := utils.ToResponseStringFromChatCompletionResponse(openaiResponse.ChatCompletionResponse)
 			resultStatus, statusReason := utils.ValidateResult(answer, testCase.Assert)
 			testResult := models.TestResult{
+				Question:     testCase.Question,
 				Status:       resultStatus,
 				StatusReason: statusReason,
 				Answer:       answer,
-				TestProvider: testProvider,
 				Cost:         openaiResponse.Cost,
 			}
 			testResults = append(testResults, testResult)
 		}
-		testCaseResults = append(testCaseResults, models.TestCaseResult{
-			Question:    testCase.Question,
+		testProviderResult := models.TestProviderResult{
+			Provider:    testProvider.Provider,
+			Model:       testProvider.Model,
+			Temperature: testProvider.Temperature,
 			TestResults: testResults,
-		})
+		}
+		testProviderResults = append(testProviderResults, testProviderResult)
 	}
 
 	testCompletionsResponse := models.TestCompletionsResponse{
-		TestCaseResults: testCaseResults,
+		TestProviderResults: testProviderResults,
 	}
 
 	c.JSON(http.StatusOK, testCompletionsResponse)

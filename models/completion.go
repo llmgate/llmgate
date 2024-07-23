@@ -32,18 +32,20 @@ type TestProvider struct {
 }
 
 type TestCompletionsResponse struct {
-	TestCaseResults []TestCaseResult `json:"testCaseResults"`
+	TestProviderResults []TestProviderResult `json:"testProviderResults"`
 }
 
-type TestCaseResult struct {
-	Question    string       `json:"question"`
+type TestProviderResult struct {
+	Provider    string       `json:"provider"`
+	Model       string       `json:"model"`
+	Temperature float32      `json:"temperature"`
 	TestResults []TestResult `json:"testResults"`
 }
 
 type TestResult struct {
-	Status       bool         `json:"status"`
-	StatusReason string       `json:"statusReason"`
-	Answer       string       `json:"answer"`
-	TestProvider TestProvider `json:"testProvider"`
-	Cost         float64      `json:"cost"`
+	Question     string  `json:"question"`
+	Status       bool    `json:"status"`
+	StatusReason string  `json:"statusReason"`
+	Answer       string  `json:"answer"`
+	Cost         float64 `json:"cost"`
 }
