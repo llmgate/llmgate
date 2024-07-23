@@ -7,11 +7,22 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig
+	Server  ServerConfig
+	Clients ClientConfigs
 }
 
 type ServerConfig struct {
 	Port int
+}
+
+type ClientConfigs struct {
+	Superbase SuperbaseConfig
+}
+
+type SuperbaseConfig struct {
+	Url           string
+	Key           string
+	EncrpytionKey string
 }
 
 func LoadConfig(configName string) (*Config, error) {

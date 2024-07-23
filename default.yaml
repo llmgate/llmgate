@@ -1,2 +1,7 @@
 server:
   port: "8080"
+clients:
+  superbase:
+    url: 'some-value'
+    key: 'some-value'
+    encrpytionkey: 'some-value'

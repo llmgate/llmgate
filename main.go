@@ -12,6 +12,7 @@ import (
 	"github.com/llmgate/llmgate/internal/handlers"
 	"github.com/llmgate/llmgate/mockllm"
 	"github.com/llmgate/llmgate/openai"
+	"github.com/llmgate/llmgate/supabase"
 )
 
 func main() {
@@ -35,13 +36,17 @@ func main() {
 	// Initialize Mock Client
 	mockLLMClient := mockllm.NewMockLLMClient()
 
+	// Supabase Client
+	supabaseClient := supabase.NewSupabaseClient(config.Clients.Superbase)
+
 	// Initialize Router
 	router := gin.Default()
 	// health handler
 	healthHandler := handlers.NewHealthHandler()
 	router.GET("/health", healthHandler.IsHealthy)
-	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient)
+	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient)
 	router.POST("/completions", llmHandler.ProcessCompletions)
+	router.POST("/completions/test", llmHandler.TestCompletions)
 
 	router.Run(fmt.Sprintf(":%d", config.Server.Port))
 }
