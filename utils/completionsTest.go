@@ -33,7 +33,7 @@ func ValidateResult(answer string, assert models.AssetTestCase) (bool, string) {
 	status := false
 	statusReason := ""
 	if assert.Type == "Contains" {
-		if strings.Contains(answer, assert.Value) {
+		if strings.Contains(strings.ToLower(answer), strings.ToLower(assert.Value)) {
 			status = true
 		} else {
 			statusReason = "Expected output to Contain " + assert.Value
