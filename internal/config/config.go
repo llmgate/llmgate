@@ -7,13 +7,24 @@ import (
 )
 
 type Config struct {
-	Server  ServerConfig
-	LLM     LLMConfigs
-	Clients ClientConfigs
+	Server   ServerConfig
+	Handlers HandlersConfig
+	LLM      LLMConfigs
+	Clients  ClientConfigs
 }
 
 type ServerConfig struct {
 	Port int
+}
+
+type HandlersConfig struct {
+	LLMHandler LLMHandlerConfig
+}
+
+type LLMHandlerConfig struct {
+	CompletionTestProvider string
+	CompletionTestModel    string
+	Temperature            float32
 }
 
 type LLMConfigs struct {

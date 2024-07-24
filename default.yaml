@@ -1,5 +1,10 @@
 server:
   port: "8080"
+handlers:
+  llmhandler:
+    completiontestprovider: 'some-value'
+    completiontestmodel: 'some-value'
+    temperature: 0
 llm:
   openai:
     key: 'some-value'

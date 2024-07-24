@@ -10,9 +10,10 @@ type ChatCompletionExtendedResponse struct {
 }
 
 type TestCompletionsRequest struct {
-	Prompt        string         `json:"prompt"`
-	TestCases     []TestCase     `json:"testCases"`
-	TestProviders []TestProvider `json:"testProviders"`
+	Prompt          string         `json:"prompt"`
+	UserRoleDetails string         `json:"userRoleDetails"`
+	TestCases       []TestCase     `json:"testCases"`
+	TestProviders   []TestProvider `json:"testProviders"`
 }
 
 type TestCase struct {

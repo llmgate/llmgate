@@ -1,0 +1,79 @@
+package utils
+
+import (
+	"strings"
+
+	"github.com/sashabaranov/go-openai"
+
+	"github.com/llmgate/llmgate/models"
+)
+
+func ToChatCompletionRequestFromPrompt(systemPrompt, userPrompt, model string, temperature float32) openai.ChatCompletionRequest {
+	return openai.ChatCompletionRequest{
+		Model: model,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: systemPrompt,
+			},
+			{
+				Role:    openai.ChatMessageRoleUser,
+				Content: userPrompt,
+			},
+		},
+		Temperature: temperature,
+	}
+}
+
+func ToResponseStringFromChatCompletionResponse(openaiResponse openai.ChatCompletionResponse) string {
+	return openaiResponse.Choices[0].Message.Content
+}
+
+func ValidateResult(answer string, assert models.AssetTestCase) (bool, string) {
+	status := false
+	statusReason := ""
+	if assert.Type == "Contains" {
+		if strings.Contains(answer, assert.Value) {
+			status = true
+		} else {
+			statusReason = "Expected output to Contain " + assert.Value
+		}
+	}
+
+	return status, statusReason
+}
+
+func GetChatCompletionRequestForTestCases(userRoleDetails, model string, temperature float32) openai.ChatCompletionRequest {
+	return openai.ChatCompletionRequest{
+		Model: model,
+		Messages: []openai.ChatCompletionMessage{
+			{
+				Role: openai.ChatMessageRoleSystem,
+				Content: `You are a test system that tests prompts for llms. You understand what kind of user is there and accordingly you create different test cases to ask questions to llm
+							Provide at least 10 questions.
+							Your response should be in the json format as following:
+							[{"question": "string of the question you should be asking", "assert": {"type":"Hard coded value 'Contains'", "Value": "string of what to check for contains operation"}}]
+							Example:
+							If a userRole is: "asking investment related qusetions"
+							[{"question": "what is difference between ETFs and Stocks? which should I invest in?", "assert": {"type":"Contains", "Value": "Risk"}}]`,
+			},
+			{
+				Role:    openai.ChatMessageRoleSystem,
+				Content: "This is userRole details: " + userRoleDetails,
+			},
+		},
+		Temperature: temperature,
+	}
+}
+
+func CleanJSONResponse(response string) string {
+	response = strings.TrimSpace(response)
+	if strings.HasPrefix(response, "```json") && strings.HasSuffix(response, "```") {
+		response = strings.TrimPrefix(response, "```json")
+		response = strings.TrimSuffix(response, "```")
+	} else if strings.HasPrefix(response, "```") && strings.HasSuffix(response, "```") {
+		response = strings.TrimPrefix(response, "```")
+		response = strings.TrimSuffix(response, "```")
+	}
+	return strings.TrimSpace(response)
+}

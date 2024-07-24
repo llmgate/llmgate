@@ -18,7 +18,7 @@ import (
 func main() {
 	env := os.Getenv("APP_ENV")
 	if env == "" {
-		env = "default"
+		env = "prod"
 	}
 
 	// Initialize configuration
@@ -44,7 +44,7 @@ func main() {
 	// health handler
 	healthHandler := handlers.NewHealthHandler()
 	router.GET("/health", healthHandler.IsHealthy)
-	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient, config.LLM)
+	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient, config.LLM, config.Handlers.LLMHandler)
 	router.POST("/completions", llmHandler.ProcessCompletions)
 	router.POST("/completions/test", llmHandler.TestCompletions)
 
