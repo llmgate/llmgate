@@ -44,7 +44,7 @@ func main() {
 	// health handler
 	healthHandler := handlers.NewHealthHandler()
 	router.GET("/health", healthHandler.IsHealthy)
-	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient)
+	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient, config.LLM)
 	router.POST("/completions", llmHandler.ProcessCompletions)
 	router.POST("/completions/test", llmHandler.TestCompletions)
 

@@ -8,6 +8,7 @@ import (
 	openaigo "github.com/sashabaranov/go-openai"
 
 	"github.com/llmgate/llmgate/gemini"
+	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/mockllm"
 	"github.com/llmgate/llmgate/models"
 	"github.com/llmgate/llmgate/openai"
@@ -32,18 +33,21 @@ type LLMHandler struct {
 	geminiClient   gemini.GeminiClient
 	mockllmClient  mockllm.MockLLMClient
 	supabaseClient supabase.SupabaseClient
+	llmConfigs     config.LLMConfigs
 }
 
 func NewLLMHandler(
 	openaiClient openai.OpenAIClient,
 	geminiClient gemini.GeminiClient,
 	mockllmClient mockllm.MockLLMClient,
-	supabaseClient supabase.SupabaseClient) *LLMHandler {
+	supabaseClient supabase.SupabaseClient,
+	llmConfigs config.LLMConfigs) *LLMHandler {
 	return &LLMHandler{
 		openaiClient:   openaiClient,
 		geminiClient:   geminiClient,
 		mockllmClient:  mockllmClient,
 		supabaseClient: supabaseClient,
+		llmConfigs:     llmConfigs,
 	}
 }
 
@@ -69,7 +73,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
 		}
-		apiKey = h.getKeyForProvider(keyUsage.UserId, llmProvider)
+		apiKey = h.getKeyForProvider(llmProvider)
 		if apiKey == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": llmProvider + " api key not configured for llmgate key"})
 			return
@@ -122,7 +126,7 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 				testProvider.Model,
 				testProvider.Temperature,
 			)
-			apiKey := h.getKeyForProvider(keyUsage.UserId, testProvider.Provider)
+			apiKey := h.getKeyForProvider(testProvider.Provider)
 			if apiKey == "" {
 				// skip the test case if no api key found for the provider
 				continue
@@ -198,10 +202,13 @@ func (h *LLMHandler) validateLLMGateKey(key string) *supabase.KeyUsage {
 	return keyUsage
 }
 
-func (h *LLMHandler) getKeyForProvider(userId, provider string) string {
-	secret, err := h.supabaseClient.GetSecret(userId, provider)
-	if err != nil {
+func (h *LLMHandler) getKeyForProvider(provider string) string {
+	switch provider {
+	case "OpenAI":
+		return h.llmConfigs.OpenAI.Key
+	case "Gemini":
+		return h.llmConfigs.Gemini.Key
+	default:
 		return ""
 	}
-	return secret.SecretValue
 }

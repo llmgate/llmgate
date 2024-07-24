@@ -8,6 +8,7 @@ import (
 
 type Config struct {
 	Server  ServerConfig
+	LLM     LLMConfigs
 	Clients ClientConfigs
 }
 
@@ -15,14 +16,26 @@ type ServerConfig struct {
 	Port int
 }
 
+type LLMConfigs struct {
+	OpenAI OpenAIConfig
+	Gemini GeminiConfig
+}
+
+type OpenAIConfig struct {
+	Key string
+}
+
+type GeminiConfig struct {
+	Key string
+}
+
 type ClientConfigs struct {
 	Superbase SuperbaseConfig
 }
 
 type SuperbaseConfig struct {
-	Url           string
-	Key           string
-	EncrpytionKey string
+	Url string
+	Key string
 }
 
 func LoadConfig(configName string) (*Config, error) {

@@ -1,7 +1,11 @@
 server:
   port: "8080"
+llm:
+  openai:
+    key: 'some-value'
+  gemini:
+    key: 'some-value'
 clients:
   superbase:
     url: 'some-value'
     key: 'some-value'
-    encrpytionkey: 'some-value'
