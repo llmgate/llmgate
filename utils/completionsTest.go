@@ -59,7 +59,7 @@ func GetChatCompletionRequestForTestCases(userRoleDetails, model string, tempera
 			},
 			{
 				Role:    openai.ChatMessageRoleSystem,
-				Content: "This is userRole details: " + userRoleDetails,
+				Content: "This is userRole details to understand what kind of questions you need to ask: " + userRoleDetails,
 			},
 		},
 		Temperature: temperature,
