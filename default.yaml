@@ -4,7 +4,8 @@ handlers:
   llmhandler:
     completiontestprovider: 'some-value'
     completiontestmodel: 'some-value'
-    temperature: 0
+    completiontesttemperature: 0
+    completiontestparallelcount: 0
 llm:
   openai:
     key: 'some-value'

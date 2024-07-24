@@ -200,7 +200,7 @@ func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsR
 
 			testResults := make([]models.TestResult, 0)
 			resultChan := make(chan models.TestResult)
-			semaphore := make(chan struct{}, 4) // Limit to 4 concurrent executions
+			semaphore := make(chan struct{}, h.handlerConfig.CompletionTestParallelCount)
 
 			apiKey := h.getKeyForProvider(testProvider.Provider)
 			if apiKey == "" {
