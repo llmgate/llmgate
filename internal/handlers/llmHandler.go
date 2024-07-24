@@ -283,7 +283,7 @@ func (h *LLMHandler) getKeyForProvider(provider string) string {
 }
 
 func (h *LLMHandler) getTestCases(userRoleDetails string) ([]models.TestCase, error) {
-	openaiRequest := utils.GetChatCompletionRequestForTestCases(userRoleDetails, h.handlerConfig.CompletionTestModel, h.handlerConfig.Temperature)
+	openaiRequest := utils.GetChatCompletionRequestForTestCases(userRoleDetails, h.handlerConfig.CompletionTestModel, h.handlerConfig.CompletionTestTemperature)
 	openaiResponse, err := h.generateOpenAIResponse(h.handlerConfig.CompletionTestProvider, openaiRequest, h.getKeyForProvider(h.handlerConfig.CompletionTestProvider))
 	if err != nil {
 		return nil, err
