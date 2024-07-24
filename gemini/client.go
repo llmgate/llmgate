@@ -24,8 +24,6 @@ func NewGeminiClient() *GeminiClient {
 
 // GenerateCompletions calls the Gemini API using OpenAI-like request format
 func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionRequest, apiKey string) (*models.ChatCompletionExtendedResponse, error) {
-	fmt.Printf("%+v\n", payload)
-
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -38,11 +36,15 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 	// Set temperature
 	if payload.Temperature > 0 {
 		genModel.SetTemperature(float32(payload.Temperature))
+	} else {
+		genModel.Temperature = nil
 	}
 
 	// Set top_p if provided
 	if payload.TopP > 0 {
 		genModel.SetTopP(float32(payload.TopP))
+	} else {
+		genModel.TopP = nil
 	}
 
 	// Set max output tokens if provided

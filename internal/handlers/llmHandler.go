@@ -236,6 +236,10 @@ func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsR
 
 					answer := utils.ToResponseStringFromChatCompletionResponse(openaiResponse.ChatCompletionResponse)
 					resultStatus, statusReason := utils.ValidateResult(answer, testCase.Assert)
+					if answer == "" {
+						statusReason = "LLM request was successful but it returned empty response"
+						resultStatus = false
+					}
 					llmResponses[j] = models.LLMResponse{
 						Provider:     testProvider.Provider,
 						Model:        testProvider.Model,
