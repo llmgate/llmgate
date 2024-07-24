@@ -12,6 +12,25 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/llmgate/llmgate/models"
+	"github.com/llmgate/llmgate/utils"
+)
+
+const (
+	// Gemini 1.5 Flash pricing
+	gemini15FlashInputTokenCostUpTo128K  = 0.00000035
+	gemini15FlashInputTokenCostOver128K  = 0.00000070
+	gemini15FlashOutputTokenCostUpTo128K = 0.00000105
+	gemini15FlashOutputTokenCostOver128K = 0.00000210
+
+	// Gemini 1.5 Pro pricing
+	gemini15ProInputTokenCostUpTo128K  = 0.00000350
+	gemini15ProInputTokenCostOver128K  = 0.00000700
+	gemini15ProOutputTokenCostUpTo128K = 0.00001050
+	gemini15ProOutputTokenCostOver128K = 0.00002100
+
+	// Gemini 1.0 Pro pricing
+	gemini10ProInputTokenCost  = 0.00000050
+	gemini10ProOutputTokenCost = 0.00000150
 )
 
 type GeminiClient struct {
@@ -177,18 +196,35 @@ func (c *GeminiClient) mapFinishReason(reason genai.FinishReason) openaigo.Finis
 	}
 }
 
-func (c *GeminiClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {
-	return &models.ChatCompletionExtendedResponse{
-		ChatCompletionResponse: openAIResponse,
-		Cost:                   0, // Implement cost calculation if needed
-	}
-}
-
-func openAIRoleToGeminiRole(role string) string {
+func (c GeminiClient) openAIRoleToGeminiRole(role string) string {
 	switch strings.ToLower(role) {
 	case openaigo.ChatMessageRoleUser:
 		return "user"
 	default:
 		return "model" // Default to model role
+	}
+}
+
+func (c GeminiClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {
+	var cost float64
+
+	if utils.StartsWith(model, "gemini-1.5-flash") {
+		if openAIResponse.Usage.PromptTokens <= 128000 {
+			cost = (gemini15FlashInputTokenCostUpTo128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15FlashOutputTokenCostUpTo128K * float64(openAIResponse.Usage.CompletionTokens))
+		} else {
+			cost = (gemini15FlashInputTokenCostOver128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15FlashOutputTokenCostOver128K * float64(openAIResponse.Usage.CompletionTokens))
+		}
+	} else if utils.StartsWith(model, "gemini-1.5-pro") {
+		if openAIResponse.Usage.PromptTokens <= 128000 {
+			cost = (gemini15ProInputTokenCostUpTo128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15ProOutputTokenCostUpTo128K * float64(openAIResponse.Usage.CompletionTokens))
+		} else {
+			cost = (gemini15ProInputTokenCostOver128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15ProOutputTokenCostOver128K * float64(openAIResponse.Usage.CompletionTokens))
+		}
+	} else if utils.StartsWith(model, "gemini-1.0-pro") {
+		cost = (gemini10ProInputTokenCost * float64(openAIResponse.Usage.PromptTokens)) + (gemini10ProOutputTokenCost * float64(openAIResponse.Usage.CompletionTokens))
+	}
+	return &models.ChatCompletionExtendedResponse{
+		ChatCompletionResponse: openAIResponse,
+		Cost:                   cost,
 	}
 }
