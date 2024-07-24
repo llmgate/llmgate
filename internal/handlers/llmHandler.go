@@ -137,14 +137,14 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 		testCases = append(testCases, testCase)
 	}
 
-	testProviderResults, err := h.executeTests(testCompletionsRequest, testCases)
+	questionResponses, err := h.executeTests(testCompletionsRequest, testCases)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	testCompletionsResponse := models.TestCompletionsResponse{
-		TestProviderResults: testProviderResults,
+		QuestionResponses: questionResponses,
 	}
 
 	c.JSON(http.StatusOK, testCompletionsResponse)
@@ -188,30 +188,29 @@ func (h *LLMHandler) validateLLMGateKey(key string) *supabase.KeyUsage {
 	return keyUsage
 }
 
-func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsRequest, testCases []models.TestCase) ([]models.TestProviderResult, error) {
-	testProviderResults := make([]models.TestProviderResult, len(testCompletionsRequest.TestProviders))
+func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsRequest, testCases []models.TestCase) ([]models.QuestionResponse, error) {
+	questionResponses := make([]models.QuestionResponse, len(testCases))
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(testCompletionsRequest.TestProviders))
 
-	for i, testProvider := range testCompletionsRequest.TestProviders {
+	for i, testCase := range testCases {
 		wg.Add(1)
-		go func(i int, testProvider models.TestProvider) {
+		go func(i int, testCase models.TestCase) {
 			defer wg.Done()
 
-			testResults := make([]models.TestResult, 0)
-			resultChan := make(chan models.TestResult)
-			semaphore := make(chan struct{}, h.handlerConfig.CompletionTestParallelCount)
+			llmResponses := make([]models.LLMResponse, len(testCompletionsRequest.TestProviders))
+			var llmWg sync.WaitGroup
 
-			apiKey := h.getKeyForProvider(testProvider.Provider)
-			if apiKey == "" {
-				errChan <- fmt.Errorf("API key not found for provider: %s", testProvider.Provider)
-				return
-			}
+			for j, testProvider := range testCompletionsRequest.TestProviders {
+				llmWg.Add(1)
+				go func(j int, testProvider models.TestProvider) {
+					defer llmWg.Done()
 
-			for _, testCase := range testCases {
-				go func(testCase models.TestCase) {
-					semaphore <- struct{}{}        // Acquire semaphore
-					defer func() { <-semaphore }() // Release semaphore
+					apiKey := h.getKeyForProvider(testProvider.Provider)
+					if apiKey == "" {
+						errChan <- fmt.Errorf("API key not found for provider: %s", testProvider.Provider)
+						return
+					}
 
 					opanaiRequest := utils.ToChatCompletionRequestFromPrompt(
 						testCompletionsRequest.Prompt,
@@ -222,40 +221,40 @@ func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsR
 
 					openaiResponse, err := h.generateOpenAIResponse(testProvider.Provider, opanaiRequest, apiKey)
 					if err != nil {
-						// Log the error but continue with other test cases
 						log.Printf("Error generating OpenAI response for provider %s: %v", testProvider.Provider, err)
-						resultChan <- models.TestResult{
-							Question:     testCase.Question,
+						llmResponses[j] = models.LLMResponse{
+							Provider:     testProvider.Provider,
+							Model:        testProvider.Model,
+							Temperature:  testProvider.Temperature,
 							Status:       false,
-							StatusReason: fmt.Sprintf("Failed to generate response: %v", err),
+							StatusReason: fmt.Sprintf("Failed to generate LLM response: %v", err),
+							Answer:       "",
+							Cost:         openaiResponse.Cost,
 						}
 						return
 					}
 
 					answer := utils.ToResponseStringFromChatCompletionResponse(openaiResponse.ChatCompletionResponse)
 					resultStatus, statusReason := utils.ValidateResult(answer, testCase.Assert)
-					testResult := models.TestResult{
-						Question:     testCase.Question,
+					llmResponses[j] = models.LLMResponse{
+						Provider:     testProvider.Provider,
+						Model:        testProvider.Model,
+						Temperature:  testProvider.Temperature,
 						Status:       resultStatus,
 						StatusReason: statusReason,
 						Answer:       answer,
 						Cost:         openaiResponse.Cost,
 					}
-					resultChan <- testResult
-				}(testCase)
+				}(j, testProvider)
 			}
 
-			for range testCases {
-				testResults = append(testResults, <-resultChan)
-			}
+			llmWg.Wait()
 
-			testProviderResults[i] = models.TestProviderResult{
-				Provider:    testProvider.Provider,
-				Model:       testProvider.Model,
-				Temperature: testProvider.Temperature,
-				TestResults: testResults,
+			questionResponses[i] = models.QuestionResponse{
+				Question:     testCase.Question,
+				LLMResponses: llmResponses,
 			}
-		}(i, testProvider)
+		}(i, testCase)
 	}
 
 	wg.Wait()
@@ -268,7 +267,7 @@ func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsR
 		}
 	}
 
-	return testProviderResults, nil
+	return questionResponses, nil
 }
 
 func (h *LLMHandler) getKeyForProvider(provider string) string {
