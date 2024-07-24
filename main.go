@@ -18,7 +18,7 @@ import (
 func main() {
 	env := os.Getenv("APP_ENV")
 	if env == "" {
-		env = "prod"
+		env = "default"
 	}
 
 	// Initialize configuration
