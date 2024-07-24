@@ -73,7 +73,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
-	if utils.StartsWith(apiKey, "llmgate") {
+	if utils.StartsWith(apiKey, "llmgate") && llmProvider != MockLLMProvider {
 		keyUsage := h.validateLLMGateKey(apiKey)
 		if keyUsage == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
