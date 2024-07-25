@@ -14,6 +14,7 @@ import (
 	googlemonitoring "github.com/llmgate/llmgate/googleMonitoring"
 	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/internal/handlers"
+	"github.com/llmgate/llmgate/localratelimiter"
 	"github.com/llmgate/llmgate/mockllm"
 	"github.com/llmgate/llmgate/openai"
 	"github.com/llmgate/llmgate/supabase"
@@ -52,8 +53,13 @@ func main() {
 	}
 	defer googleMonitoringClient.Close()
 
+	// Rate Limiter
+	rateLimiter := localratelimiter.NewRateLimiter(*supabaseClient)
+
 	// Initialize Router
 	router := gin.Default()
+	// Local Rate Limiter
+	router.Use(rateLimiter.RateLimiterMiddleware())
 	// Metrics handler
 	router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	// Health Handler

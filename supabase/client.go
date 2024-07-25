@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
+
+	"github.com/patrickmn/go-cache"
 
 	"github.com/llmgate/llmgate/internal/config"
 )
@@ -15,22 +18,31 @@ const (
 )
 
 type KeyUsage struct {
-	Key       string `json:"key"`
-	UserId    string `json:"user_id"`
-	ProjectId string `json:"project_id"`
+	Key                 string `json:"key"`
+	UserId              string `json:"user_id"`
+	ProjectId           string `json:"project_id"`
+	KeyRateLimitPerSec  *int   `json:"key_rate_limit_per_second,omitempty"`
+	UserRateLimitPerSec *int   `json:"user_rate_limit_per_second,omitempty"`
 }
 
 type SupabaseClient struct {
 	superbaseConfig config.SuperbaseConfig
+	cache           *cache.Cache
 }
 
 func NewSupabaseClient(superbaseConfig config.SuperbaseConfig) *SupabaseClient {
 	return &SupabaseClient{
 		superbaseConfig: superbaseConfig,
+		cache:           cache.New(30*time.Minute, 10*time.Minute),
 	}
 }
 
 func (s *SupabaseClient) GetKeyUsage(key string) (*KeyUsage, error) {
+	// Check cache first
+	if cachedKeyUsage, found := s.cache.Get(key); found {
+		return cachedKeyUsage.(*KeyUsage), nil
+	}
+
 	var keyUsages []KeyUsage
 
 	hashKey := s.hash(key)
@@ -69,6 +81,9 @@ func (s *SupabaseClient) GetKeyUsage(key string) (*KeyUsage, error) {
 	}
 
 	keyUsages[0].Key = key
+
+	// Store in cache
+	s.cache.Set(key, &keyUsages[0], cache.DefaultExpiration)
 
 	return &keyUsages[0], nil
 }

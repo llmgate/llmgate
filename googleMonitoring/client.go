@@ -88,10 +88,10 @@ func (c *MonitoringClient) getOrCreateHistogramVec(metricName string, labels []s
 	return histogram
 }
 
-func (c *MonitoringClient) RecordCounter(metricName string, labels map[string]string, value int64) {
+func (c *MonitoringClient) RecordCounter(metricName string, labels map[string]string, value float64) {
 	labelNames, labelValues := splitLabels(labels)
 	counter := c.getOrCreateCounterVec(metricName, labelNames)
-	counter.WithLabelValues(labelValues...).Add(float64(value))
+	counter.WithLabelValues(labelValues...).Add(value)
 }
 
 func (c *MonitoringClient) RecordTimer(metricName string, labels map[string]string, duration time.Duration) {

@@ -1,17 +1,2 @@
 server:
   port: "8080"
-handlers:
-  llmhandler:
-    completiontestprovider: 'some-value'
-    completiontestmodel: 'some-value'
-    completiontesttemperature: 0
-    completiontestparallelcount: 0
-llm:
-  openai:
-    key: 'some-value'
-  gemini:
-    key: 'some-value'
-clients:
-  superbase:
-    url: 'some-value'
-    key: 'some-value'

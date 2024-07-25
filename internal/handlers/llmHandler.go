@@ -110,7 +110,8 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 
 	if keyUsage != nil {
 		h.logCompletion(c.Request.Context(), keyUsage.UserId, keyUsage.ProjectId, llmProvider, openaiRequest.Model,
-			c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey))
+			c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey),
+			extendedResponse.Cost)
 	}
 
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
@@ -118,7 +119,8 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 
 func (h *LLMHandler) logCompletion(ctx context.Context,
 	userId, projectId, llmProvider, llmModel,
-	traceCustomerId, traceSessionId string) {
+	traceCustomerId, traceSessionId string,
+	llmCost float64) {
 	if h.googleMonitoringClient == nil {
 		return
 	}
@@ -134,7 +136,10 @@ func (h *LLMHandler) logCompletion(ctx context.Context,
 	if traceSessionId != "" {
 		labels["traceSessionId"] = traceSessionId
 	}
-	h.googleMonitoringClient.RecordCounter("llm", labels, 1)
+	// add calls count
+	h.googleMonitoringClient.RecordCounter("llmCalls", labels, 1)
+	// add cost count
+	h.googleMonitoringClient.RecordCounter("llmCost", labels, llmCost)
 }
 
 func (h *LLMHandler) TestCompletions(c *gin.Context) {
