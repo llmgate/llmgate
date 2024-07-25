@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,6 +12,7 @@ import (
 	openaigo "github.com/sashabaranov/go-openai"
 
 	"github.com/llmgate/llmgate/gemini"
+	googlemonitoring "github.com/llmgate/llmgate/googleMonitoring"
 	"github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/mockllm"
 	"github.com/llmgate/llmgate/models"
@@ -32,12 +34,13 @@ const (
 )
 
 type LLMHandler struct {
-	openaiClient   openai.OpenAIClient
-	geminiClient   gemini.GeminiClient
-	mockllmClient  mockllm.MockLLMClient
-	supabaseClient supabase.SupabaseClient
-	llmConfigs     config.LLMConfigs
-	handlerConfig  config.LLMHandlerConfig
+	openaiClient           openai.OpenAIClient
+	geminiClient           gemini.GeminiClient
+	mockllmClient          mockllm.MockLLMClient
+	supabaseClient         supabase.SupabaseClient
+	googleMonitoringClient *googlemonitoring.MonitoringClient
+	llmConfigs             config.LLMConfigs
+	handlerConfig          config.LLMHandlerConfig
 }
 
 func NewLLMHandler(
@@ -45,15 +48,17 @@ func NewLLMHandler(
 	geminiClient gemini.GeminiClient,
 	mockllmClient mockllm.MockLLMClient,
 	supabaseClient supabase.SupabaseClient,
+	googleMonitoringClient *googlemonitoring.MonitoringClient,
 	llmConfigs config.LLMConfigs,
 	handlerConfig config.LLMHandlerConfig) *LLMHandler {
 	return &LLMHandler{
-		openaiClient:   openaiClient,
-		geminiClient:   geminiClient,
-		mockllmClient:  mockllmClient,
-		supabaseClient: supabaseClient,
-		llmConfigs:     llmConfigs,
-		handlerConfig:  handlerConfig,
+		openaiClient:           openaiClient,
+		geminiClient:           geminiClient,
+		mockllmClient:          mockllmClient,
+		supabaseClient:         supabaseClient,
+		googleMonitoringClient: googleMonitoringClient,
+		llmConfigs:             llmConfigs,
+		handlerConfig:          handlerConfig,
 	}
 }
 
@@ -73,8 +78,9 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
+	var keyUsage *supabase.KeyUsage
 	if utils.StartsWith(apiKey, "llmgate") && llmProvider != MockLLMProvider {
-		keyUsage := h.validateLLMGateKey(apiKey)
+		keyUsage = h.validateLLMGateKey(apiKey)
 		if keyUsage == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
@@ -102,7 +108,33 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		c.Header(costHeaderResponseKey, fmt.Sprintf("$%f", extendedResponse.Cost))
 	}
 
+	if keyUsage != nil {
+		h.logCompletion(c.Request.Context(), keyUsage.UserId, keyUsage.ProjectId, llmProvider, openaiRequest.Model,
+			c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey))
+	}
+
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
+}
+
+func (h *LLMHandler) logCompletion(ctx context.Context,
+	userId, projectId, llmProvider, llmModel,
+	traceCustomerId, traceSessionId string) {
+	if h.googleMonitoringClient == nil {
+		return
+	}
+	labels := map[string]string{
+		"userId":      userId,
+		"projectId":   projectId,
+		"llmProvider": llmProvider,
+		"llmModel":    llmModel,
+	}
+	if traceCustomerId != "" {
+		labels["traceCustomerId"] = traceCustomerId
+	}
+	if traceSessionId != "" {
+		labels["traceSessionId"] = traceSessionId
+	}
+	h.googleMonitoringClient.RecordCounter("llm", labels, 1)
 }
 
 func (h *LLMHandler) TestCompletions(c *gin.Context) {

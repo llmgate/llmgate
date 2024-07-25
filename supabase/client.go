@@ -15,8 +15,9 @@ const (
 )
 
 type KeyUsage struct {
-	Key    string `json:"key"`
-	UserId string `json:"user_id"`
+	Key       string `json:"key"`
+	UserId    string `json:"user_id"`
+	ProjectId string `json:"project_id"`
 }
 
 type SupabaseClient struct {

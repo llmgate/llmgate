@@ -7,14 +7,20 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Handlers HandlersConfig
-	LLM      LLMConfigs
-	Clients  ClientConfigs
+	Server        ServerConfig
+	GoogleService GoogleServiceConfig
+	Handlers      HandlersConfig
+	LLM           LLMConfigs
+	Clients       ClientConfigs
 }
 
 type ServerConfig struct {
 	Port int
+}
+
+type GoogleServiceConfig struct {
+	ProjectId string
+	JsonKey   string
 }
 
 type HandlersConfig struct {
