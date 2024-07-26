@@ -80,7 +80,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 
 	var keyDetails *supabase.KeyDetails
 	if utils.StartsWith(apiKey, "llmgate") && llmProvider != MockLLMProvider {
-		keyDetails = h.validateLLMGateKey(apiKey)
+		keyDetails = utils.ValidateLLMGateKey(apiKey, h.supabaseClient)
 		if keyDetails == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
@@ -187,13 +187,15 @@ func (h *LLMHandler) logCompletion(ctx context.Context,
 		}
 		h.supabaseClient.LogTestSession(
 			&supabase.TestSessionLog{
-				TraceSessionId:     traceSessionId,
-				LlmRequest:         utils.ToJSONString(OpenAIRequest),
-				LlmResponseSuccess: llmResponseSuccess,
-				LlmResponseError:   llmResponseError,
-				UserId:             keyDetails.UserId,
-				Cost:               extendedResponseSuccess.Cost,
-				TraceCustomerId:    traceCustomerIdPtr,
+				TraceSessionId:              traceSessionId,
+				LlmRequest:                  utils.ToJSONString(OpenAIRequest),
+				LlmResponseSuccess:          llmResponseSuccess,
+				LlmResponseError:            llmResponseError,
+				UserId:                      keyDetails.UserId,
+				Cost:                        extendedResponseSuccess.Cost,
+				TraceCustomerId:             traceCustomerIdPtr,
+				LlmResponseEvaluationScore:  nil,
+				LlmResponseEvaluationReason: nil,
 			},
 		)
 	}
@@ -205,7 +207,7 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 	}
 
-	keyDetails := h.validateLLMGateKey(apiKey)
+	keyDetails := utils.ValidateLLMGateKey(apiKey, h.supabaseClient)
 	if keyDetails == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 	}
@@ -284,19 +286,6 @@ func (h *LLMHandler) generateOpenAIResponse(
 	default:
 		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}
-}
-
-func (h *LLMHandler) validateLLMGateKey(key string) *supabase.KeyDetails {
-	if !utils.StartsWith(key, "llmgate") {
-		return nil
-	}
-
-	keyDetails, err := h.supabaseClient.GetKeyDetails(key)
-	if err != nil {
-		return nil
-	}
-
-	return keyDetails
 }
 
 func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsRequest, testCases []models.TestCase) ([]models.QuestionResponse, error) {

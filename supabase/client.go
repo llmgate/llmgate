@@ -43,15 +43,16 @@ type KeyUsage struct {
 }
 
 type TestSessionLog struct {
-	TraceSessionId               string  `json:"trace_session_id"`
-	LlmRequest                   string  `json:"llm_request"`
-	LlmResponseSuccess           *string `json:"llm_response_success,omitempty"`
-	LlmResponseError             *string `json:"llm_response_error,omitempty"`
-	UserId                       string  `json:"user_id"`
-	Cost                         float64 `json:"cost,omitempty"`
-	TraceCustomerId              *string `json:"trace_customer_id,omitempty"`
-	LlmResponseEvaluationSuccess *bool   `json:"llm_response_evaluation_success,omitempty"`
-	LlmResponseEvaluationReason  *string `json:"llm_response_evaluation_reason,omitempty"`
+	TraceSessionId              string     `json:"trace_session_id"`
+	LlmRequest                  string     `json:"llm_request"`
+	LlmResponseSuccess          *string    `json:"llm_response_success,omitempty"`
+	LlmResponseError            *string    `json:"llm_response_error,omitempty"`
+	UserId                      string     `json:"user_id"`
+	Cost                        float64    `json:"cost,omitempty"`
+	TraceCustomerId             *string    `json:"trace_customer_id,omitempty"`
+	LlmResponseEvaluationScore  *float64   `json:"llm_response_evaluation_score,omitempty"`
+	LlmResponseEvaluationReason *string    `json:"llm_response_evaluation_reason,omitempty"`
+	CreatedAt                   *time.Time `json:"created_at,omitempty"`
 }
 
 type SupabaseClient struct {
@@ -189,6 +190,40 @@ func (s *SupabaseClient) LogTestSession(sessionLog *TestSessionLog) error {
 	}
 
 	return nil
+}
+
+func (s *SupabaseClient) GetTestSessionLogs(sessionId, userId string) ([]TestSessionLog, error) {
+	apiURL := fmt.Sprintf("%s/rest/v1/%s?trace_session_id=eq.%s&user_id=eq.%s",
+		s.superbaseConfig.Url, testSessionsTableName, sessionId, userId)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("apikey", s.superbaseConfig.Key)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyString := string(bodyBytes)
+		return nil, fmt.Errorf("failed to get test session logs, status code: %d, response: %s", resp.StatusCode, bodyString)
+	}
+
+	var testSessionLogs []TestSessionLog
+	err = json.NewDecoder(resp.Body).Decode(&testSessionLogs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return testSessionLogs, nil
 }
 
 func (s SupabaseClient) hash(input string) string {

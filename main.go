@@ -69,6 +69,9 @@ func main() {
 	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient, googleMonitoringClient, config.LLM, config.Handlers.LLMHandler)
 	router.POST("/completions", llmHandler.ProcessCompletions)
 	router.POST("/completions/test", llmHandler.TestCompletions)
+	// Test Session Details
+	testSessionHandler := handlers.NewTestSessionHandler(*supabaseClient)
+	router.GET("/visualize", testSessionHandler.VisualizeTestSession)
 
 	go func() {
 		for {
