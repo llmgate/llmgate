@@ -78,10 +78,10 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
-	var keyUsage *supabase.KeyUsage
+	var keyDetails *supabase.KeyDetails
 	if utils.StartsWith(apiKey, "llmgate") && llmProvider != MockLLMProvider {
-		keyUsage = h.validateLLMGateKey(apiKey)
-		if keyUsage == nil {
+		keyDetails = h.validateLLMGateKey(apiKey)
+		if keyDetails == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
 		}
@@ -99,6 +99,16 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
+
+	if keyDetails != nil {
+		go func() {
+			h.logCompletion(c.Request.Context(), *keyDetails, llmProvider, openaiRequest.Model,
+				c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey),
+				openaiRequest,
+				extendedResponse, err)
+		}()
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -108,38 +118,85 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		c.Header(costHeaderResponseKey, fmt.Sprintf("$%f", extendedResponse.Cost))
 	}
 
-	if keyUsage != nil {
-		h.logCompletion(c.Request.Context(), keyUsage.UserId, keyUsage.ProjectId, llmProvider, openaiRequest.Model,
-			c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey),
-			extendedResponse.Cost)
-	}
-
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
 }
 
 func (h *LLMHandler) logCompletion(ctx context.Context,
-	userId, projectId, llmProvider, llmModel,
+	keyDetails supabase.KeyDetails,
+	llmProvider, llmModel,
 	traceCustomerId, traceSessionId string,
-	llmCost float64) {
+	OpenAIRequest openaigo.ChatCompletionRequest,
+	extendedResponseSuccess *models.ChatCompletionExtendedResponse,
+	extendedResponseError error) {
 	if h.googleMonitoringClient == nil {
 		return
 	}
 	labels := map[string]string{
-		"userId":      userId,
-		"projectId":   projectId,
-		"llmProvider": llmProvider,
-		"llmModel":    llmModel,
-	}
-	if traceCustomerId != "" {
-		labels["traceCustomerId"] = traceCustomerId
-	}
-	if traceSessionId != "" {
-		labels["traceSessionId"] = traceSessionId
+		"userId":          keyDetails.UserId,
+		"projectId":       keyDetails.ProjectId,
+		"llmProvider":     llmProvider,
+		"llmModel":        llmModel,
+		"traceCustomerId": traceCustomerId,
+		"traceSessionId":  traceSessionId,
 	}
 	// add calls count
 	h.googleMonitoringClient.RecordCounter("llmCalls", labels, 1)
 	// add cost count
-	h.googleMonitoringClient.RecordCounter("llmCost", labels, llmCost)
+	h.googleMonitoringClient.RecordCounter("llmCost", labels, extendedResponseSuccess.Cost)
+	// add key usage logs
+	var traceCustomerIdPtr *string
+	if traceCustomerId != "" {
+		traceCustomerIdPtr = &traceCustomerId
+	}
+	var traceSessionIdPtr *string
+	if traceSessionId != "" {
+		traceSessionIdPtr = &traceSessionId
+	}
+	isSuccess := extendedResponseError == nil
+	var inputTokens int64
+	var outputTokens int64
+	if extendedResponseSuccess != nil {
+		inputTokens = int64(extendedResponseSuccess.ChatCompletionResponse.Usage.PromptTokens)
+		outputTokens = int64(extendedResponseSuccess.ChatCompletionResponse.Usage.CompletionTokens)
+	}
+	h.supabaseClient.LogKeyUsage(
+		&supabase.KeyUsage{
+			UsageType:       "ProcessCompletions",
+			LlmProvider:     &llmProvider,
+			LlmModel:        &llmModel,
+			TraceCustomerId: traceCustomerIdPtr,
+			TraceSessionId:  traceSessionIdPtr,
+			Cost:            &extendedResponseSuccess.Cost,
+			InputTokens:     &inputTokens,
+			OutputTokens:    &outputTokens,
+			IsSuccess:       &isSuccess,
+			KeyId:           keyDetails.KeyId,
+		},
+	)
+	// add test session details
+	if traceSessionId != "" && utils.StartsWith(traceSessionId, "test-") {
+		var llmResponseSuccess *string
+		if extendedResponseSuccess != nil {
+			temp := utils.ToJSONString(*extendedResponseSuccess)
+			llmResponseSuccess = &temp
+		}
+		var llmResponseError *string
+		if extendedResponseError != nil {
+			temp := extendedResponseError.Error()
+			llmResponseError = &temp
+		}
+		h.supabaseClient.LogTestSession(
+			&supabase.TestSessionLog{
+				TraceSessionId:     traceSessionId,
+				LlmRequest:         utils.ToJSONString(OpenAIRequest),
+				LlmResponseSuccess: llmResponseSuccess,
+				LlmResponseError:   llmResponseError,
+				UserId:             keyDetails.UserId,
+				Cost:               extendedResponseSuccess.Cost,
+				TraceCustomerId:    traceCustomerIdPtr,
+			},
+		)
+	}
 }
 
 func (h *LLMHandler) TestCompletions(c *gin.Context) {
@@ -148,8 +205,8 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 	}
 
-	keyUsage := h.validateLLMGateKey(apiKey)
-	if keyUsage == nil {
+	keyDetails := h.validateLLMGateKey(apiKey)
+	if keyDetails == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 	}
 
@@ -184,6 +241,23 @@ func (h *LLMHandler) TestCompletions(c *gin.Context) {
 		QuestionResponses: questionResponses,
 	}
 
+	go func() {
+		h.supabaseClient.LogKeyUsage(
+			&supabase.KeyUsage{
+				UsageType:       "TestCompletions",
+				LlmProvider:     nil,
+				LlmModel:        nil,
+				TraceCustomerId: nil,
+				TraceSessionId:  nil,
+				Cost:            nil,
+				InputTokens:     nil,
+				OutputTokens:    nil,
+				IsSuccess:       nil,
+				KeyId:           keyDetails.KeyId,
+			},
+		)
+	}()
+
 	c.JSON(http.StatusOK, testCompletionsResponse)
 }
 
@@ -212,17 +286,17 @@ func (h *LLMHandler) generateOpenAIResponse(
 	}
 }
 
-func (h *LLMHandler) validateLLMGateKey(key string) *supabase.KeyUsage {
+func (h *LLMHandler) validateLLMGateKey(key string) *supabase.KeyDetails {
 	if !utils.StartsWith(key, "llmgate") {
 		return nil
 	}
 
-	keyUsage, err := h.supabaseClient.GetKeyUsage(key)
+	keyDetails, err := h.supabaseClient.GetKeyDetails(key)
 	if err != nil {
 		return nil
 	}
 
-	return keyUsage
+	return keyDetails
 }
 
 func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsRequest, testCases []models.TestCase) ([]models.QuestionResponse, error) {

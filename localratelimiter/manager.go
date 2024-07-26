@@ -48,7 +48,7 @@ func (rl *RateLimiter) RateLimiterMiddleware() gin.HandlerFunc {
 		}
 
 		// fetch apikey details
-		keyUsage, err := rl.supabaseClient.GetKeyUsage(apiKey)
+		keyDetails, err := rl.supabaseClient.GetKeyDetails(apiKey)
 		if err != nil {
 			// no need to validate rate limiting
 			c.Next()
@@ -57,17 +57,17 @@ func (rl *RateLimiter) RateLimiterMiddleware() gin.HandlerFunc {
 
 		traceCustomerId := c.GetHeader("llmgate-trace-customer-id")
 
-		useLimiter := (traceCustomerId != "" && keyUsage.UserRateLimitPerSec != nil) || (keyUsage.KeyRateLimitPerSec != nil)
+		useLimiter := (traceCustomerId != "" && keyDetails.UserRateLimitPerSec != nil) || (keyDetails.KeyRateLimitPerSec != nil)
 		if useLimiter {
 			rl.mutex.Lock()
 		}
 		var userLimiter *limiterEntry
-		if traceCustomerId != "" && keyUsage.UserRateLimitPerSec != nil {
-			userLimiter = rl.getLimiter(rl.userLimiters, "userId-"+traceCustomerId, rate.Limit(*keyUsage.UserRateLimitPerSec), *keyUsage.UserRateLimitPerSec*2)
+		if traceCustomerId != "" && keyDetails.UserRateLimitPerSec != nil {
+			userLimiter = rl.getLimiter(rl.userLimiters, "userId-"+traceCustomerId, rate.Limit(*keyDetails.UserRateLimitPerSec), *keyDetails.UserRateLimitPerSec*2)
 		}
 		var apiKeyLimiter *limiterEntry
-		if keyUsage.KeyRateLimitPerSec != nil {
-			apiKeyLimiter = rl.getLimiter(rl.apiKeyLimiters, "key-"+apiKey, rate.Limit(*keyUsage.KeyRateLimitPerSec), *keyUsage.KeyRateLimitPerSec*2)
+		if keyDetails.KeyRateLimitPerSec != nil {
+			apiKeyLimiter = rl.getLimiter(rl.apiKeyLimiters, "key-"+apiKey, rate.Limit(*keyDetails.KeyRateLimitPerSec), *keyDetails.KeyRateLimitPerSec*2)
 		}
 		if useLimiter {
 			rl.mutex.Unlock()
