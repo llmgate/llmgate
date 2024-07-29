@@ -32,12 +32,20 @@ func ToResponseStringFromChatCompletionResponse(openaiResponse openai.ChatComple
 func ValidateResult(answer string, assert models.AssetTestCase) (bool, string) {
 	status := false
 	statusReason := ""
-	if assert.Type == "Contains" {
-		if strings.Contains(strings.ToLower(answer), strings.ToLower(assert.Value)) {
-			status = true
-		} else {
-			statusReason = "Expected output to Contain " + assert.Value
+	keywords := strings.Split(assert.Value, ",")
+	totalKeywords := len(keywords)
+	matchedKeywords := 0
+
+	for _, keyword := range keywords {
+		if strings.Contains(strings.ToLower(answer), strings.ToLower(strings.TrimSpace(keyword))) {
+			matchedKeywords++
 		}
+	}
+
+	if matchedKeywords >= (totalKeywords+1)/3 { // At least few of the keywords should be present
+		status = true
+	} else {
+		statusReason = "Expected output to contain most of these keywords: " + assert.Value
 	}
 
 	return status, statusReason
@@ -52,10 +60,10 @@ func GetChatCompletionRequestForTestCases(userRoleDetails, model string, tempera
 				Content: `You are a test system that tests prompts for llms. You understand what kind of user is there and accordingly you create different test cases to ask questions to llm
 							Provide at least 10 questions.
 							Your response should be in the json format as following:
-							[{"question": "string of the question you should be asking", "assert": {"type":"Hard coded value 'Contains'", "Value": "string of what to check for contains operation"}}]
+							[{"question": "string of the question you should be asking", "assert": {"type":"Hard coded value 'Contains'", "Value": "comma seperated string of what keywords to check for contains operation"}}]
 							Example:
 							If a userRole is: "asking investment related qusetions"
-							[{"question": "what is difference between ETFs and Stocks? which should I invest in?", "assert": {"type":"Contains", "Value": "Risk"}}]`,
+							[{"question": "what is difference between ETFs and Stocks? which should I invest in?", "assert": {"type":"Contains", "Value": "Ownership,Diversification,Management,Trading,Risk"}}]`,
 			},
 			{
 				Role:    openai.ChatMessageRoleSystem,
