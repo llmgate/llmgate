@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -66,7 +65,7 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 		return nil, fmt.Errorf("failed to generate content: %w", err)
 	}
 
-	openaiResponse := c.convertGeminiToOpenAI(geminiResponse)
+	openaiResponse := c.convertGeminiToOpenAI(payload.Model, geminiResponse)
 	return c.toChatCompletionExtendedResponse(payload.Model, openaiResponse), nil
 }
 
@@ -104,30 +103,14 @@ func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletion
 				return
 			}
 
-			openAIResp := convertGeminiStreamToOpenAI(resp)
-			responseChan <- openAIResp
+			chunks := breakIntoChunks(payload.Model, resp)
+			for _, chunk := range chunks {
+				responseChan <- chunk
+			}
 		}
 	}()
 
 	return responseChan, nil
-}
-
-type geminiStreamReader struct {
-	iter   *genai.GenerateContentResponseIterator
-	client *genai.Client
-}
-
-func (g *geminiStreamReader) Recv() (*openaigo.ChatCompletionStreamResponse, error) {
-	resp, err := g.iter.Next()
-	if err == iterator.Done {
-		g.client.Close()
-		return nil, io.EOF
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error receiving from stream: %w", err)
-	}
-
-	return convertGeminiStreamToOpenAI(resp), nil
 }
 
 func (c *GeminiClient) convertOpenAIToGeminiPrompt(messages []openaigo.ChatCompletionMessage) ([]genai.Part, error) {
@@ -173,7 +156,7 @@ func (c *GeminiClient) parseImageURL(url string) (genai.Part, error) {
 }
 
 // Convert Gemini response to OpenAI response
-func (c *GeminiClient) convertGeminiToOpenAI(geminiResp *genai.GenerateContentResponse) openaigo.ChatCompletionResponse {
+func (c *GeminiClient) convertGeminiToOpenAI(model string, geminiResp *genai.GenerateContentResponse) openaigo.ChatCompletionResponse {
 	choices := make([]openaigo.ChatCompletionChoice, len(geminiResp.Candidates))
 	for i, candidate := range geminiResp.Candidates {
 		if candidate.Content != nil {
@@ -193,7 +176,7 @@ func (c *GeminiClient) convertGeminiToOpenAI(geminiResp *genai.GenerateContentRe
 		ID:      fmt.Sprintf("gemini-%d", time.Now().UnixNano()),
 		Object:  "chat.completion",
 		Created: time.Now().Unix(),
-		Model:   "gemini", // Or a more specific model name if available
+		Model:   model,
 		Choices: choices,
 		Usage: openaigo.Usage{
 			PromptTokens:     int(geminiResp.UsageMetadata.PromptTokenCount),
@@ -203,28 +186,39 @@ func (c *GeminiClient) convertGeminiToOpenAI(geminiResp *genai.GenerateContentRe
 	}
 }
 
-func convertGeminiStreamToOpenAI(geminiResp *genai.GenerateContentResponse) *openaigo.ChatCompletionStreamResponse {
+func convertGeminiStreamToOpenAI(model string, geminiResp *genai.GenerateContentResponse) *openaigo.ChatCompletionStreamResponse {
 	choices := make([]openaigo.ChatCompletionStreamChoice, len(geminiResp.Candidates))
 	for i, candidate := range geminiResp.Candidates {
 		if candidate.Content != nil {
 			content := concatenateContent(candidate.Content.Parts)
+			delta := openaigo.ChatCompletionStreamChoiceDelta{}
+
+			// Only include role in the first chunk
+			if i == 0 {
+				delta.Role = mapRole(candidate.Content.Role)
+			}
+
+			// Break content into smaller chunks (e.g., words)
+			words := strings.Fields(content)
+			if len(words) > 0 {
+				delta.Content = words[0]
+			}
+
 			choices[i] = openaigo.ChatCompletionStreamChoice{
-				Index: int(candidate.Index),
-				Delta: openaigo.ChatCompletionStreamChoiceDelta{
-					Role:    mapRole(candidate.Content.Role),
-					Content: content,
-				},
+				Index:        int(candidate.Index),
+				Delta:        delta,
 				FinishReason: mapFinishReason(candidate.FinishReason),
 			}
 		}
 	}
 
 	return &openaigo.ChatCompletionStreamResponse{
-		ID:      fmt.Sprintf("gemini-stream-%d", time.Now().UnixNano()),
-		Object:  "chat.completion.chunk",
-		Created: time.Now().Unix(),
-		Model:   "gemini", // Or a more specific model name if available
-		Choices: choices,
+		ID:                fmt.Sprintf("chatcmpl-%s", utils.GenerateRandomString(29)),
+		Object:            "chat.completion.chunk",
+		Created:           time.Now().Unix(),
+		Model:             model,
+		Choices:           choices,
+		SystemFingerprint: "fp_" + utils.GenerateRandomString(8),
 	}
 }
 
@@ -320,4 +314,29 @@ func concatenateContent(parts []genai.Part) string {
 		}
 	}
 	return content.String()
+}
+
+func breakIntoChunks(model string, resp *genai.GenerateContentResponse) []*openaigo.ChatCompletionStreamResponse {
+	var chunks []*openaigo.ChatCompletionStreamResponse
+
+	for _, candidate := range resp.Candidates {
+		if candidate.Content != nil {
+			content := concatenateContent(candidate.Content.Parts)
+			words := strings.Fields(content)
+
+			for i, word := range words {
+				chunk := convertGeminiStreamToOpenAI(model, resp)
+				chunk.Choices[0].Delta.Content = word
+
+				// Only include role in the first chunk
+				if i > 0 {
+					chunk.Choices[0].Delta.Role = ""
+				}
+
+				chunks = append(chunks, chunk)
+			}
+		}
+	}
+
+	return chunks
 }
