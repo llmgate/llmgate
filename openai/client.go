@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"io"
 
 	"github.com/llmgate/llmgate/models"
 	"github.com/llmgate/llmgate/utils"
@@ -34,6 +35,39 @@ func (c OpenAIClient) GenerateCompletions(payload openaigo.ChatCompletionRequest
 	}
 
 	return c.toChatCompletionExtendedResponse(payload.Model, response), nil
+}
+
+// GenerateCompletions calls the OpenAI Completions API
+func (c OpenAIClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+	client := openaigo.NewClient(apiKey)
+	responseChan := make(chan *openaigo.ChatCompletionStreamResponse)
+
+	go func() {
+		defer close(responseChan)
+
+		stream, err := client.CreateChatCompletionStream(
+			context.Background(),
+			payload,
+		)
+		if err != nil {
+			return
+		}
+		defer stream.Close()
+
+		for {
+			response, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				break
+			}
+
+			responseChan <- &response
+		}
+	}()
+
+	return responseChan, nil
 }
 
 func (c OpenAIClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {

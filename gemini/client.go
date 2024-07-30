@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
 	"github.com/google/generative-ai-go/genai"
 	openaigo "github.com/sashabaranov/go-openai"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/llmgate/llmgate/models"
@@ -52,26 +54,7 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 
 	genModel := client.GenerativeModel(payload.Model)
 
-	// Set temperature
-	if payload.Temperature > 0 {
-		genModel.SetTemperature(float32(payload.Temperature))
-	} else {
-		genModel.Temperature = nil
-	}
-
-	// Set top_p if provided
-	if payload.TopP > 0 {
-		genModel.SetTopP(float32(payload.TopP))
-	} else {
-		genModel.TopP = nil
-	}
-
-	// Set max output tokens if provided
-	if payload.MaxTokens > 0 {
-		genModel.SetMaxOutputTokens(int32(payload.MaxTokens))
-	} else {
-		genModel.MaxOutputTokens = nil
-	}
+	setModelParameters(genModel, payload)
 
 	prompt, err := c.convertOpenAIToGeminiPrompt(payload.Messages)
 	if err != nil {
@@ -85,6 +68,66 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 
 	openaiResponse := c.convertGeminiToOpenAI(geminiResponse)
 	return c.toChatCompletionExtendedResponse(payload.Model, openaiResponse), nil
+}
+
+func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
+	}
+
+	genModel := client.GenerativeModel(payload.Model)
+
+	setModelParameters(genModel, payload)
+
+	prompt, err := c.convertOpenAIToGeminiPrompt(payload.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert OpenAI messages to Gemini prompt: %w", err)
+	}
+
+	iter := genModel.GenerateContentStream(ctx, prompt...)
+
+	responseChan := make(chan *openaigo.ChatCompletionStreamResponse)
+
+	go func() {
+		defer close(responseChan)
+		defer client.Close()
+
+		for {
+			resp, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				// stop stream
+				return
+			}
+
+			openAIResp := convertGeminiStreamToOpenAI(resp)
+			responseChan <- openAIResp
+		}
+	}()
+
+	return responseChan, nil
+}
+
+type geminiStreamReader struct {
+	iter   *genai.GenerateContentResponseIterator
+	client *genai.Client
+}
+
+func (g *geminiStreamReader) Recv() (*openaigo.ChatCompletionStreamResponse, error) {
+	resp, err := g.iter.Next()
+	if err == iterator.Done {
+		g.client.Close()
+		return nil, io.EOF
+	}
+	if err != nil {
+		return nil, fmt.Errorf("error receiving from stream: %w", err)
+	}
+
+	return convertGeminiStreamToOpenAI(resp), nil
 }
 
 func (c *GeminiClient) convertOpenAIToGeminiPrompt(messages []openaigo.ChatCompletionMessage) ([]genai.Part, error) {
@@ -134,14 +177,14 @@ func (c *GeminiClient) convertGeminiToOpenAI(geminiResp *genai.GenerateContentRe
 	choices := make([]openaigo.ChatCompletionChoice, len(geminiResp.Candidates))
 	for i, candidate := range geminiResp.Candidates {
 		if candidate.Content != nil {
-			content := c.concatenateContent(candidate.Content.Parts)
+			content := concatenateContent(candidate.Content.Parts)
 			choices[i] = openaigo.ChatCompletionChoice{
 				Index: int(candidate.Index),
 				Message: openaigo.ChatCompletionMessage{
-					Role:    c.mapRole(candidate.Content.Role),
+					Role:    mapRole(candidate.Content.Role),
 					Content: content,
 				},
-				FinishReason: c.mapFinishReason(candidate.FinishReason),
+				FinishReason: mapFinishReason(candidate.FinishReason),
 			}
 		}
 	}
@@ -160,39 +203,28 @@ func (c *GeminiClient) convertGeminiToOpenAI(geminiResp *genai.GenerateContentRe
 	}
 }
 
-func (c *GeminiClient) concatenateContent(parts []genai.Part) string {
-	var content strings.Builder
-	for _, part := range parts {
-		switch v := part.(type) {
-		case genai.Text:
-			content.WriteString(string(v))
-			// Handle other types if necessary
+func convertGeminiStreamToOpenAI(geminiResp *genai.GenerateContentResponse) *openaigo.ChatCompletionStreamResponse {
+	choices := make([]openaigo.ChatCompletionStreamChoice, len(geminiResp.Candidates))
+	for i, candidate := range geminiResp.Candidates {
+		if candidate.Content != nil {
+			content := concatenateContent(candidate.Content.Parts)
+			choices[i] = openaigo.ChatCompletionStreamChoice{
+				Index: int(candidate.Index),
+				Delta: openaigo.ChatCompletionStreamChoiceDelta{
+					Role:    mapRole(candidate.Content.Role),
+					Content: content,
+				},
+				FinishReason: mapFinishReason(candidate.FinishReason),
+			}
 		}
 	}
-	return content.String()
-}
 
-func (c *GeminiClient) mapRole(role string) string {
-	switch role {
-	case "user":
-		return openaigo.ChatMessageRoleUser
-	case "model":
-		return openaigo.ChatMessageRoleAssistant
-	default:
-		return "system"
-	}
-}
-
-func (c *GeminiClient) mapFinishReason(reason genai.FinishReason) openaigo.FinishReason {
-	switch reason {
-	case genai.FinishReasonStop:
-		return openaigo.FinishReasonStop
-	case genai.FinishReasonMaxTokens:
-		return openaigo.FinishReasonLength
-	case genai.FinishReasonSafety:
-		return openaigo.FinishReasonContentFilter
-	default:
-		return openaigo.FinishReasonNull
+	return &openaigo.ChatCompletionStreamResponse{
+		ID:      fmt.Sprintf("gemini-stream-%d", time.Now().UnixNano()),
+		Object:  "chat.completion.chunk",
+		Created: time.Now().Unix(),
+		Model:   "gemini", // Or a more specific model name if available
+		Choices: choices,
 	}
 }
 
@@ -206,25 +238,86 @@ func (c GeminiClient) openAIRoleToGeminiRole(role string) string {
 }
 
 func (c GeminiClient) toChatCompletionExtendedResponse(model string, openAIResponse openaigo.ChatCompletionResponse) *models.ChatCompletionExtendedResponse {
-	var cost float64
-
-	if utils.StartsWith(model, "gemini-1.5-flash") {
-		if openAIResponse.Usage.PromptTokens <= 128000 {
-			cost = (gemini15FlashInputTokenCostUpTo128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15FlashOutputTokenCostUpTo128K * float64(openAIResponse.Usage.CompletionTokens))
-		} else {
-			cost = (gemini15FlashInputTokenCostOver128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15FlashOutputTokenCostOver128K * float64(openAIResponse.Usage.CompletionTokens))
-		}
-	} else if utils.StartsWith(model, "gemini-1.5-pro") {
-		if openAIResponse.Usage.PromptTokens <= 128000 {
-			cost = (gemini15ProInputTokenCostUpTo128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15ProOutputTokenCostUpTo128K * float64(openAIResponse.Usage.CompletionTokens))
-		} else {
-			cost = (gemini15ProInputTokenCostOver128K * float64(openAIResponse.Usage.PromptTokens)) + (gemini15ProOutputTokenCostOver128K * float64(openAIResponse.Usage.CompletionTokens))
-		}
-	} else if utils.StartsWith(model, "gemini-1.0-pro") {
-		cost = (gemini10ProInputTokenCost * float64(openAIResponse.Usage.PromptTokens)) + (gemini10ProOutputTokenCost * float64(openAIResponse.Usage.CompletionTokens))
-	}
+	cost := calculateCost(model, openAIResponse.Usage.PromptTokens, openAIResponse.Usage.CompletionTokens)
 	return &models.ChatCompletionExtendedResponse{
 		ChatCompletionResponse: openAIResponse,
 		Cost:                   cost,
 	}
+}
+
+func setModelParameters(genModel *genai.GenerativeModel, payload openaigo.ChatCompletionRequest) {
+	if payload.Temperature > 0 {
+		genModel.SetTemperature(float32(payload.Temperature))
+	} else {
+		genModel.Temperature = nil
+	}
+	if payload.TopP > 0 {
+		genModel.SetTopP(float32(payload.TopP))
+	} else {
+		genModel.TopP = nil
+	}
+	if payload.MaxTokens > 0 {
+		genModel.SetMaxOutputTokens(int32(payload.MaxTokens))
+	} else {
+		genModel.MaxOutputTokens = nil
+	}
+}
+
+func calculateCost(model string, promptTokens, completionTokens int) float64 {
+	var inputCost, outputCost float64
+
+	switch {
+	case utils.StartsWith(model, "gemini-1.5-flash"):
+		if promptTokens <= 128000 {
+			inputCost, outputCost = gemini15FlashInputTokenCostUpTo128K, gemini15FlashOutputTokenCostUpTo128K
+		} else {
+			inputCost, outputCost = gemini15FlashInputTokenCostOver128K, gemini15FlashOutputTokenCostOver128K
+		}
+	case utils.StartsWith(model, "gemini-1.5-pro"):
+		if promptTokens <= 128000 {
+			inputCost, outputCost = gemini15ProInputTokenCostUpTo128K, gemini15ProOutputTokenCostUpTo128K
+		} else {
+			inputCost, outputCost = gemini15ProInputTokenCostOver128K, gemini15ProOutputTokenCostOver128K
+		}
+	case utils.StartsWith(model, "gemini-1.0-pro"):
+		inputCost, outputCost = gemini10ProInputTokenCost, gemini10ProOutputTokenCost
+	}
+
+	return (inputCost * float64(promptTokens)) + (outputCost * float64(completionTokens))
+}
+
+func mapRole(role string) string {
+	switch role {
+	case "user":
+		return openaigo.ChatMessageRoleUser
+	case "model":
+		return openaigo.ChatMessageRoleAssistant
+	default:
+		return "system"
+	}
+}
+
+func mapFinishReason(reason genai.FinishReason) openaigo.FinishReason {
+	switch reason {
+	case genai.FinishReasonStop:
+		return openaigo.FinishReasonStop
+	case genai.FinishReasonMaxTokens:
+		return openaigo.FinishReasonLength
+	case genai.FinishReasonSafety:
+		return openaigo.FinishReasonContentFilter
+	default:
+		return openaigo.FinishReasonNull
+	}
+}
+
+func concatenateContent(parts []genai.Part) string {
+	var content strings.Builder
+	for _, part := range parts {
+		switch v := part.(type) {
+		case genai.Text:
+			content.WriteString(string(v))
+			// Handle other types if necessary
+		}
+	}
+	return content.String()
 }

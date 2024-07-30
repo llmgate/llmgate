@@ -98,6 +98,13 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
+	if openaiRequest.Stream {
+		h.processCompletionsStreamImpl(c, llmProvider, openaiRequest, apiKey)
+		return
+	}
+
+	// non stream request
+
 	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
 
 	if keyDetails != nil {
@@ -119,6 +126,43 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
+}
+
+func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
+	llmProvider string,
+	openaiRequest openaigo.ChatCompletionRequest,
+	apiKey string) {
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "streaming unsupported"})
+		return
+	}
+
+	responseChan, err := h.generateOpenAIStreamResponse(
+		llmProvider,
+		openaiRequest,
+		apiKey,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	for response := range responseChan {
+		data, err := json.Marshal(response)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Writer.Write(data)
+		c.Writer.Write([]byte("\n\n"))
+		flusher.Flush()
+	}
 }
 
 func (h *LLMHandler) logCompletion(ctx context.Context,
@@ -283,6 +327,20 @@ func (h *LLMHandler) generateOpenAIResponse(
 		return h.geminiClient.GenerateCompletions(openaiRequest, apiKey)
 	case MockLLMProvider:
 		return h.mockllmClient.GenerateCompletions(openaiRequest)
+	default:
+		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
+	}
+}
+
+func (h *LLMHandler) generateOpenAIStreamResponse(
+	llmProvider string,
+	openaiRequest openaigo.ChatCompletionRequest,
+	apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+	switch llmProvider {
+	case OpenAILLMProvider:
+		return h.openaiClient.GenerateCompletionsStream(openaiRequest, apiKey)
+	case GeminiLLMProvider:
+		return h.geminiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	default:
 		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}
