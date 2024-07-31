@@ -69,7 +69,7 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 	return c.toChatCompletionExtendedResponse(payload.Model, openaiResponse), nil
 }
 
-func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan openaigo.ChatCompletionStreamResponse, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
@@ -87,7 +87,7 @@ func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletion
 
 	iter := genModel.GenerateContentStream(ctx, prompt...)
 
-	responseChan := make(chan *openaigo.ChatCompletionStreamResponse)
+	responseChan := make(chan openaigo.ChatCompletionStreamResponse)
 
 	go func() {
 		defer close(responseChan)
@@ -186,7 +186,7 @@ func (c *GeminiClient) convertGeminiToOpenAI(model string, geminiResp *genai.Gen
 	}
 }
 
-func convertGeminiStreamToOpenAI(model string, geminiResp *genai.GenerateContentResponse) *openaigo.ChatCompletionStreamResponse {
+func convertGeminiStreamToOpenAI(model string, geminiResp *genai.GenerateContentResponse) openaigo.ChatCompletionStreamResponse {
 	choices := make([]openaigo.ChatCompletionStreamChoice, len(geminiResp.Candidates))
 	for i, candidate := range geminiResp.Candidates {
 		if candidate.Content != nil {
@@ -212,7 +212,7 @@ func convertGeminiStreamToOpenAI(model string, geminiResp *genai.GenerateContent
 		}
 	}
 
-	return &openaigo.ChatCompletionStreamResponse{
+	return openaigo.ChatCompletionStreamResponse{
 		ID:                fmt.Sprintf("chatcmpl-%s", utils.GenerateRandomString(29)),
 		Object:            "chat.completion.chunk",
 		Created:           time.Now().Unix(),
@@ -316,8 +316,8 @@ func concatenateContent(parts []genai.Part) string {
 	return content.String()
 }
 
-func breakIntoChunks(model string, resp *genai.GenerateContentResponse) []*openaigo.ChatCompletionStreamResponse {
-	var chunks []*openaigo.ChatCompletionStreamResponse
+func breakIntoChunks(model string, resp *genai.GenerateContentResponse) []openaigo.ChatCompletionStreamResponse {
+	var chunks []openaigo.ChatCompletionStreamResponse
 
 	for _, candidate := range resp.Candidates {
 		if candidate.Content != nil {
@@ -326,7 +326,13 @@ func breakIntoChunks(model string, resp *genai.GenerateContentResponse) []*opena
 
 			for i, word := range words {
 				chunk := convertGeminiStreamToOpenAI(model, resp)
-				chunk.Choices[0].Delta.Content = word
+
+				// Preserve spaces by adding them between words
+				if i > 0 {
+					chunk.Choices[0].Delta.Content = " " + word
+				} else {
+					chunk.Choices[0].Delta.Content = word
+				}
 
 				// Only include role in the first chunk
 				if i > 0 {

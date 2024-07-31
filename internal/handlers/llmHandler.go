@@ -337,6 +337,8 @@ func (h *LLMHandler) generateOpenAIStreamResponse(
 	switch llmProvider {
 	case OpenAILLMProvider:
 		return h.openaiClient.GenerateCompletionsStream(openaiRequest, apiKey)
+	case GeminiLLMProvider:
+		return h.geminiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	default:
 		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}
