@@ -31,7 +31,7 @@ func (h *TestSessionHandler) VisualizeTestSession(c *gin.Context) {
 		return
 	}
 
-	apiKey := c.GetHeader(keyHeaderKey)
+	apiKey := c.GetHeader(llmgateLKeyHeaderKey)
 	if apiKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 	}
