@@ -27,7 +27,8 @@ const (
 	MockLLMProvider   = "Mock"
 
 	providerQueryKey       = "provider"
-	keyHeaderKey           = "key"
+	llmgateLKeyHeaderKey   = "key"
+	llmApiHeaderKey        = "llm-api-key"
 	traceCustomerHeaderKey = "llmgate-trace-customer-id"
 	sessionIdHeaderKey     = "llmgate-session-id"
 	costHeaderResponseKey  = "LLM-Cost"
@@ -72,21 +73,26 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		return
 	}
 
-	apiKey := c.GetHeader(keyHeaderKey)
-	if apiKey == "" {
+	llmgateApiKey := c.GetHeader(llmgateLKeyHeaderKey)
+	externalLlmApiKey := c.GetHeader(llmApiHeaderKey)
+	if llmgateApiKey == "" && externalLlmApiKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 		return
 	}
 
 	var keyDetails *supabase.KeyDetails
-	if utils.StartsWith(apiKey, "llmgate") && llmProvider != MockLLMProvider {
-		keyDetails = utils.ValidateLLMGateKey(apiKey, h.supabaseClient)
+	if llmProvider != MockLLMProvider {
+		keyDetails = utils.ValidateLLMGateKey(llmgateApiKey, h.supabaseClient)
 		if keyDetails == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
 		}
-		apiKey = h.getKeyForProvider(llmProvider)
-		if apiKey == "" {
+	}
+
+	if externalLlmApiKey == "" && keyDetails != nil {
+		// fetch llm api key from llmgate
+		externalLlmApiKey = h.getKeyForProvider(llmProvider)
+		if externalLlmApiKey == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": llmProvider + " api key not configured for llmgate key"})
 			return
 		}
@@ -99,13 +105,13 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	if openaiRequest.Stream {
-		h.processCompletionsStreamImpl(c, llmProvider, openaiRequest, apiKey)
+		h.processCompletionsStreamImpl(c, llmProvider, openaiRequest, externalLlmApiKey)
 		return
 	}
 
 	// non stream request
 
-	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, apiKey)
+	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, externalLlmApiKey)
 
 	if keyDetails != nil {
 		go func() {
@@ -244,7 +250,7 @@ func (h *LLMHandler) logCompletion(ctx context.Context,
 }
 
 func (h *LLMHandler) TestCompletions(c *gin.Context) {
-	apiKey := c.GetHeader(keyHeaderKey)
+	apiKey := c.GetHeader(llmgateLKeyHeaderKey)
 	if apiKey == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
 	}
