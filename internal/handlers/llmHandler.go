@@ -81,7 +81,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	var keyDetails *supabase.KeyDetails
-	if llmProvider != MockLLMProvider {
+	if llmProvider != MockLLMProvider && llmgateApiKey != "" {
 		keyDetails = utils.ValidateLLMGateKey(llmgateApiKey, h.supabaseClient)
 		if keyDetails == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
