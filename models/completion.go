@@ -1,6 +1,8 @@
 package models
 
 import (
+	"time"
+
 	openaigo "github.com/sashabaranov/go-openai"
 )
 
@@ -49,4 +51,12 @@ type LLMResponse struct {
 	StatusReason string  `json:"statusReason"`
 	Answer       string  `json:"answer"`
 	Cost         float64 `json:"cost"`
+}
+
+type StreamMetrics struct {
+	Latency           time.Duration `json:"latency"`
+	TotalInputTokens  int           `json:"totalInputTokens"`
+	TotalOutputTokens int           `json:"totalOutputTokens"`
+	Cost              float64       `json:"cost"`
+	Error             error         `json:"error"`
 }

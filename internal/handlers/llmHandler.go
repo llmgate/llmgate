@@ -147,7 +147,7 @@ func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
 		return
 	}
 
-	responseChan, err := h.generateOpenAIStreamResponse(
+	responseChan, metricsChan, err := h.generateOpenAIStreamResponse(
 		llmProvider,
 		openaiRequest,
 		apiKey,
@@ -166,6 +166,22 @@ func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
 
 	// Send a final empty data message to signal the end of the stream
 	c.SSEvent("", "[DONE]")
+
+	metrics, ok := <-metricsChan
+	if ok {
+		// Metrics received
+		c.SSEvent("", "[METRICS]")
+		flusher.Flush()
+
+		metricsJSON, err := json.Marshal(metrics)
+		if err == nil {
+			c.SSEvent("", string(metricsJSON))
+			flusher.Flush()
+		}
+	}
+
+	// Final signal to close the connection
+	c.SSEvent("", "[CLOSE]")
 	flusher.Flush()
 }
 
@@ -339,14 +355,14 @@ func (h *LLMHandler) generateOpenAIResponse(
 func (h *LLMHandler) generateOpenAIStreamResponse(
 	llmProvider string,
 	openaiRequest openaigo.ChatCompletionRequest,
-	apiKey string) (chan openaigo.ChatCompletionStreamResponse, error) {
+	apiKey string) (chan openaigo.ChatCompletionStreamResponse, chan models.StreamMetrics, error) {
 	switch llmProvider {
 	case OpenAILLMProvider:
 		return h.openaiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	case GeminiLLMProvider:
 		return h.geminiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	default:
-		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
+		return nil, nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}
 }
 

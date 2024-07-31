@@ -69,11 +69,11 @@ func (c *GeminiClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 	return c.toChatCompletionExtendedResponse(payload.Model, openaiResponse), nil
 }
 
-func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan openaigo.ChatCompletionStreamResponse, error) {
+func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan openaigo.ChatCompletionStreamResponse, chan models.StreamMetrics, error) {
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Gemini client: %w", err)
+		return nil, nil, fmt.Errorf("failed to create Gemini client: %w", err)
 	}
 
 	genModel := client.GenerativeModel(payload.Model)
@@ -82,15 +82,21 @@ func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletion
 
 	prompt, err := c.convertOpenAIToGeminiPrompt(payload.Messages)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert OpenAI messages to Gemini prompt: %w", err)
+		return nil, nil, fmt.Errorf("failed to convert OpenAI messages to Gemini prompt: %w", err)
 	}
 
 	iter := genModel.GenerateContentStream(ctx, prompt...)
 
 	responseChan := make(chan openaigo.ChatCompletionStreamResponse)
+	metricsChan := make(chan models.StreamMetrics, 1) // Buffer of 1 to prevent blocking
 
 	go func() {
+		startTime := time.Now()
+		totalInputTokens := 0
+		totalOutputTokens := 0
+
 		defer close(responseChan)
+		defer close(metricsChan)
 		defer client.Close()
 
 		for {
@@ -99,18 +105,36 @@ func (c *GeminiClient) GenerateCompletionsStream(payload openaigo.ChatCompletion
 				break
 			}
 			if err != nil {
-				// stop stream
+				metricsChan <- models.StreamMetrics{Error: err}
 				return
 			}
 
 			chunks := breakIntoChunks(payload.Model, resp)
 			for _, chunk := range chunks {
 				responseChan <- chunk
+
+				// Count output tokens
+				if len(chunk.Choices) > 0 {
+					totalOutputTokens += len(strings.Fields(chunk.Choices[0].Delta.Content))
+				}
 			}
+
+			// Count input tokens
+			totalInputTokens = int(resp.UsageMetadata.PromptTokenCount)
+		}
+
+		latency := time.Since(startTime)
+		cost := calculateCost(payload.Model, totalInputTokens, totalOutputTokens)
+
+		metricsChan <- models.StreamMetrics{
+			Latency:           latency,
+			TotalInputTokens:  totalInputTokens,
+			TotalOutputTokens: totalOutputTokens,
+			Cost:              cost,
 		}
 	}()
 
-	return responseChan, nil
+	return responseChan, metricsChan, nil
 }
 
 func (c *GeminiClient) convertOpenAIToGeminiPrompt(messages []openaigo.ChatCompletionMessage) ([]genai.Part, error) {
