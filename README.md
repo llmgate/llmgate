@@ -17,7 +17,7 @@ To make requests to the LLM Gate, you need to specify the provider and send a JS
 
 #### Endpoint
 ```bash
-POST https://llmgate.uc.r.appspot.com/completions?provider=Mock
+POST http://localhost:8080/completions?provider=Mock
 ```
 
 #### Header
