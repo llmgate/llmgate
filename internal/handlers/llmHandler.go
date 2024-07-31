@@ -153,16 +153,14 @@ func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
 	}
 
 	for response := range responseChan {
-		data, err := json.Marshal(response)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		c.Writer.Write(data)
-		c.Writer.Write([]byte("\n\n"))
+		// Send each chunk as it comes
+		c.SSEvent("", response)
 		flusher.Flush()
 	}
+
+	// Send a final empty data message to signal the end of the stream
+	c.SSEvent("", "[DONE]")
+	flusher.Flush()
 }
 
 func (h *LLMHandler) logCompletion(ctx context.Context,
@@ -335,12 +333,10 @@ func (h *LLMHandler) generateOpenAIResponse(
 func (h *LLMHandler) generateOpenAIStreamResponse(
 	llmProvider string,
 	openaiRequest openaigo.ChatCompletionRequest,
-	apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+	apiKey string) (chan openaigo.ChatCompletionStreamResponse, error) {
 	switch llmProvider {
 	case OpenAILLMProvider:
 		return h.openaiClient.GenerateCompletionsStream(openaiRequest, apiKey)
-	case GeminiLLMProvider:
-		return h.geminiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	default:
 		return nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}

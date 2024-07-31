@@ -38,9 +38,9 @@ func (c OpenAIClient) GenerateCompletions(payload openaigo.ChatCompletionRequest
 }
 
 // GenerateCompletions calls the OpenAI Completions API
-func (c OpenAIClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan *openaigo.ChatCompletionStreamResponse, error) {
+func (c OpenAIClient) GenerateCompletionsStream(payload openaigo.ChatCompletionRequest, apiKey string) (chan openaigo.ChatCompletionStreamResponse, error) {
 	client := openaigo.NewClient(apiKey)
-	responseChan := make(chan *openaigo.ChatCompletionStreamResponse)
+	responseChan := make(chan openaigo.ChatCompletionStreamResponse)
 
 	go func() {
 		defer close(responseChan)
@@ -63,7 +63,7 @@ func (c OpenAIClient) GenerateCompletionsStream(payload openaigo.ChatCompletionR
 				break
 			}
 
-			responseChan <- &response
+			responseChan <- response
 		}
 	}()
 
