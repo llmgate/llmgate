@@ -12,7 +12,7 @@ import (
 
 	"github.com/llmgate/llmgate/gemini"
 	googlemonitoring "github.com/llmgate/llmgate/googleMonitoring"
-	"github.com/llmgate/llmgate/internal/config"
+	vconfig "github.com/llmgate/llmgate/internal/config"
 	"github.com/llmgate/llmgate/internal/handlers"
 	"github.com/llmgate/llmgate/localratelimiter"
 	"github.com/llmgate/llmgate/mockllm"
@@ -21,18 +21,28 @@ import (
 )
 
 func main() {
+	var config *vconfig.Config
+	var err error
+
 	env := os.Getenv("APP_ENV")
 	if env == "" {
 		env = "default"
 	}
+	secretBucket := os.Getenv("SECRET_BUCKET")
+	secretObject := os.Getenv("SECRET_OBJECT")
 
-	ctx := context.Background()
+	if len(secretBucket) > 0 && len(secretObject) > 0 {
+		// fetch from the bucket
+		config, err = vconfig.LoadConfigFromGCS(secretBucket, secretObject)
+	} else {
+		config, err = vconfig.LoadConfig(env)
+	}
 
-	// Initialize configuration
-	config, err := config.LoadConfig(env)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+
+	ctx := context.Background()
 
 	// Initialize OpenAI Client
 	openaiClient := openai.NewOpenAIClient()
