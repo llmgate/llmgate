@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
-	"sync"
 
 	"github.com/gin-gonic/gin"
 	openaigo "github.com/sashabaranov/go-openai"
@@ -265,68 +263,6 @@ func (h *LLMHandler) logCompletion(ctx context.Context,
 	}
 }
 
-func (h *LLMHandler) TestCompletions(c *gin.Context) {
-	apiKey := c.GetHeader(llmgateLKeyHeaderKey)
-	if apiKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
-	}
-
-	keyDetails := utils.ValidateLLMGateKey(apiKey, h.supabaseClient)
-	if keyDetails == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
-	}
-
-	var testCompletionsRequest models.TestCompletionsRequest
-	if err := c.ShouldBindJSON(&testCompletionsRequest); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	testCases := make([]models.TestCase, 0)
-	if testCompletionsRequest.UserRoleDetails != "" {
-		llmTestCases, err := h.getTestCases(testCompletionsRequest.UserRoleDetails)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		testCases = llmTestCases
-	}
-
-	for _, testCase := range testCompletionsRequest.TestCases {
-		// add user defiend test cases
-		testCases = append(testCases, testCase)
-	}
-
-	questionResponses, err := h.executeTests(testCompletionsRequest, testCases)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	testCompletionsResponse := models.TestCompletionsResponse{
-		QuestionResponses: questionResponses,
-	}
-
-	go func() {
-		h.supabaseClient.LogKeyUsage(
-			&supabase.KeyUsage{
-				UsageType:       "TestCompletions",
-				LlmProvider:     nil,
-				LlmModel:        nil,
-				TraceCustomerId: nil,
-				TraceSessionId:  nil,
-				Cost:            nil,
-				InputTokens:     nil,
-				OutputTokens:    nil,
-				IsSuccess:       nil,
-				KeyId:           keyDetails.KeyId,
-			},
-		)
-	}()
-
-	c.JSON(http.StatusOK, testCompletionsResponse)
-}
-
 func isValidProvider(provider string) bool {
 	switch provider {
 	case OpenAILLMProvider, GeminiLLMProvider, MockLLMProvider:
@@ -366,92 +302,6 @@ func (h *LLMHandler) generateOpenAIStreamResponse(
 	}
 }
 
-func (h *LLMHandler) executeTests(testCompletionsRequest models.TestCompletionsRequest, testCases []models.TestCase) ([]models.QuestionResponse, error) {
-	questionResponses := make([]models.QuestionResponse, len(testCases))
-	var wg sync.WaitGroup
-	errChan := make(chan error, len(testCompletionsRequest.TestProviders))
-
-	for i, testCase := range testCases {
-		wg.Add(1)
-		go func(i int, testCase models.TestCase) {
-			defer wg.Done()
-
-			llmResponses := make([]models.LLMResponse, len(testCompletionsRequest.TestProviders))
-			var llmWg sync.WaitGroup
-
-			for j, testProvider := range testCompletionsRequest.TestProviders {
-				llmWg.Add(1)
-				go func(j int, testProvider models.TestProvider) {
-					defer llmWg.Done()
-
-					apiKey := h.getKeyForProvider(testProvider.Provider)
-					if apiKey == "" {
-						errChan <- fmt.Errorf("API key not found for provider: %s", testProvider.Provider)
-						return
-					}
-
-					opanaiRequest := utils.ToChatCompletionRequestFromPrompt(
-						testCompletionsRequest.Prompt,
-						testCase.Question,
-						testProvider.Model,
-						testProvider.Temperature,
-					)
-
-					openaiResponse, err := h.generateOpenAIResponse(testProvider.Provider, opanaiRequest, apiKey)
-					if err != nil {
-						log.Printf("Error generating OpenAI response for provider %s: %v", testProvider.Provider, err)
-						llmResponses[j] = models.LLMResponse{
-							Provider:     testProvider.Provider,
-							Model:        testProvider.Model,
-							Temperature:  testProvider.Temperature,
-							Status:       false,
-							StatusReason: fmt.Sprintf("Failed to generate LLM response: %v", err),
-							Answer:       "",
-							Cost:         openaiResponse.Cost,
-						}
-						return
-					}
-
-					answer := utils.ToResponseStringFromChatCompletionResponse(openaiResponse.ChatCompletionResponse)
-					resultStatus, statusReason := utils.ValidateResult(answer, testCase.Assert)
-					if answer == "" {
-						statusReason = "LLM request was successful but it returned empty response"
-						resultStatus = false
-					}
-					llmResponses[j] = models.LLMResponse{
-						Provider:     testProvider.Provider,
-						Model:        testProvider.Model,
-						Temperature:  testProvider.Temperature,
-						Status:       resultStatus,
-						StatusReason: statusReason,
-						Answer:       answer,
-						Cost:         openaiResponse.Cost,
-					}
-				}(j, testProvider)
-			}
-
-			llmWg.Wait()
-
-			questionResponses[i] = models.QuestionResponse{
-				Question:     testCase.Question,
-				LLMResponses: llmResponses,
-			}
-		}(i, testCase)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	// Check for API key errors
-	for err := range errChan {
-		if err != nil {
-			return nil, err // Return the first error encountered
-		}
-	}
-
-	return questionResponses, nil
-}
-
 func (h *LLMHandler) getKeyForProvider(provider string) string {
 	switch provider {
 	case "OpenAI":
@@ -461,23 +311,4 @@ func (h *LLMHandler) getKeyForProvider(provider string) string {
 	default:
 		return ""
 	}
-}
-
-func (h *LLMHandler) getTestCases(userRoleDetails string) ([]models.TestCase, error) {
-	openaiRequest := utils.GetChatCompletionRequestForTestCases(userRoleDetails, h.handlerConfig.CompletionTestModel, h.handlerConfig.CompletionTestTemperature)
-	openaiResponse, err := h.generateOpenAIResponse(h.handlerConfig.CompletionTestProvider, openaiRequest, h.getKeyForProvider(h.handlerConfig.CompletionTestProvider))
-	if err != nil {
-		return nil, err
-	}
-
-	jsonStr := openaiResponse.ChatCompletionResponse.Choices[0].Message.Content
-	jsonStr = utils.CleanJSONResponse(jsonStr)
-
-	var testCases []models.TestCase
-	err = json.Unmarshal([]byte(jsonStr), &testCases)
-	if err != nil {
-		return nil, err
-	}
-
-	return testCases, nil
 }
