@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	openaigo "github.com/sashabaranov/go-openai"
@@ -24,12 +25,13 @@ const (
 	GeminiLLMProvider = "Gemini"
 	MockLLMProvider   = "Mock"
 
-	providerQueryKey       = "provider"
-	llmgateLKeyHeaderKey   = "key"
-	llmApiHeaderKey        = "llm-api-key"
-	traceCustomerHeaderKey = "llmgate-trace-customer-id"
-	sessionIdHeaderKey     = "llmgate-session-id"
-	costHeaderResponseKey  = "LLM-Cost"
+	providerQueryKey         = "provider"
+	llmgateLKeyHeaderKey     = "key"
+	llmApiHeaderKey          = "llm-api-key"
+	traceCustomerHeaderKey   = "llmgate-trace-customer-id"
+	sessionIdHeaderKey       = "llmgate-session-id"
+	costHeaderResponseKey    = "llm-cost"
+	latencyHeaderResponseKey = "llm-latency"
 )
 
 type LLMHandler struct {
@@ -109,7 +111,9 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 
 	// non stream request
 
+	startTime := time.Now()
 	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, externalLlmApiKey)
+	latency := time.Since(startTime)
 
 	if keyDetails != nil {
 		go func() {
@@ -126,8 +130,9 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	}
 
 	if extendedResponse.Cost > 0 {
-		c.Header(costHeaderResponseKey, fmt.Sprintf("$%f", extendedResponse.Cost))
+		c.Header(costHeaderResponseKey, fmt.Sprintf("%f", extendedResponse.Cost))
 	}
+	c.Header(latencyHeaderResponseKey, fmt.Sprintf("%d", latency.Nanoseconds()))
 
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
 }

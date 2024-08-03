@@ -72,7 +72,8 @@ key: <Your-OpenAI-Key/Gemini-Key/Any-String-For-Mock>
 
 #### Response Header Example
 ```bash
-Llm-Cost: $0.000017
+llm-cost: 0.000017
+llm-latency: 123445 (nano seconds)
 ```
 
 ## Running Locally
