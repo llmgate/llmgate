@@ -28,8 +28,9 @@ const (
 	providerQueryKey         = "provider"
 	llmgateLKeyHeaderKey     = "key"
 	llmApiHeaderKey          = "llm-api-key"
-	traceCustomerHeaderKey   = "llmgate-trace-customer-id"
-	sessionIdHeaderKey       = "llmgate-session-id"
+	traceCustomerHeaderKey   = "x-llmgate-trace-customer-id"
+	sessionIdHeaderKey       = "x-llmgate-session-id"
+	requestSourceHeaderKey   = "x-llmgate-source"
 	costHeaderResponseKey    = "llm-cost"
 	latencyHeaderResponseKey = "llm-latency"
 )
@@ -115,15 +116,6 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	extendedResponse, err := h.generateOpenAIResponse(llmProvider, openaiRequest, externalLlmApiKey)
 	latency := time.Since(startTime)
 
-	if keyDetails != nil {
-		go func() {
-			h.logCompletion(c.Request.Context(), *keyDetails, llmProvider, openaiRequest.Model,
-				c.GetHeader(traceCustomerHeaderKey), c.GetHeader(sessionIdHeaderKey),
-				openaiRequest,
-				extendedResponse, err)
-		}()
-	}
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -133,6 +125,10 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		c.Header(costHeaderResponseKey, fmt.Sprintf("%f", extendedResponse.Cost))
 	}
 	c.Header(latencyHeaderResponseKey, fmt.Sprintf("%d", latency.Nanoseconds()))
+
+	go func() {
+		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey))
+	}()
 
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
 }
@@ -188,84 +184,17 @@ func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
 	flusher.Flush()
 }
 
-func (h *LLMHandler) logCompletion(ctx context.Context,
-	keyDetails supabase.KeyDetails,
-	llmProvider, llmModel,
-	traceCustomerId, traceSessionId string,
-	OpenAIRequest openaigo.ChatCompletionRequest,
-	extendedResponseSuccess *models.ChatCompletionExtendedResponse,
-	extendedResponseError error) {
+func (h *LLMHandler) logUsageMetrics(ctx context.Context, requestSource string) {
 	if h.googleMonitoringClient == nil {
 		return
 	}
+
 	labels := map[string]string{
-		"userId":          keyDetails.UserId,
-		"projectId":       keyDetails.ProjectId,
-		"llmProvider":     llmProvider,
-		"llmModel":        llmModel,
-		"traceCustomerId": traceCustomerId,
-		"traceSessionId":  traceSessionId,
+		"source": requestSource,
 	}
-	// add calls count
-	h.googleMonitoringClient.RecordCounter("llmCalls", labels, 1)
-	// add cost count
-	h.googleMonitoringClient.RecordCounter("llmCost", labels, extendedResponseSuccess.Cost)
-	// add key usage logs
-	var traceCustomerIdPtr *string
-	if traceCustomerId != "" {
-		traceCustomerIdPtr = &traceCustomerId
-	}
-	var traceSessionIdPtr *string
-	if traceSessionId != "" {
-		traceSessionIdPtr = &traceSessionId
-	}
-	isSuccess := extendedResponseError == nil
-	var inputTokens int64
-	var outputTokens int64
-	if extendedResponseSuccess != nil {
-		inputTokens = int64(extendedResponseSuccess.ChatCompletionResponse.Usage.PromptTokens)
-		outputTokens = int64(extendedResponseSuccess.ChatCompletionResponse.Usage.CompletionTokens)
-	}
-	h.supabaseClient.LogKeyUsage(
-		&supabase.KeyUsage{
-			UsageType:       "ProcessCompletions",
-			LlmProvider:     &llmProvider,
-			LlmModel:        &llmModel,
-			TraceCustomerId: traceCustomerIdPtr,
-			TraceSessionId:  traceSessionIdPtr,
-			Cost:            &extendedResponseSuccess.Cost,
-			InputTokens:     &inputTokens,
-			OutputTokens:    &outputTokens,
-			IsSuccess:       &isSuccess,
-			KeyId:           keyDetails.KeyId,
-		},
-	)
-	// add test session details
-	if traceSessionId != "" && utils.StartsWith(traceSessionId, "test-") {
-		var llmResponseSuccess *string
-		if extendedResponseSuccess != nil {
-			temp := utils.ToJSONString(*extendedResponseSuccess)
-			llmResponseSuccess = &temp
-		}
-		var llmResponseError *string
-		if extendedResponseError != nil {
-			temp := extendedResponseError.Error()
-			llmResponseError = &temp
-		}
-		h.supabaseClient.LogTestSession(
-			&supabase.TestSessionLog{
-				TraceSessionId:              traceSessionId,
-				LlmRequest:                  utils.ToJSONString(OpenAIRequest),
-				LlmResponseSuccess:          llmResponseSuccess,
-				LlmResponseError:            llmResponseError,
-				UserId:                      keyDetails.UserId,
-				Cost:                        extendedResponseSuccess.Cost,
-				TraceCustomerId:             traceCustomerIdPtr,
-				LlmResponseEvaluationScore:  nil,
-				LlmResponseEvaluationReason: nil,
-			},
-		)
-	}
+
+	// add metrics for requests
+	h.googleMonitoringClient.RecordCounter("requests", labels, 1)
 }
 
 func isValidProvider(provider string) bool {

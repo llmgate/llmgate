@@ -1,7 +1,6 @@
 package supabase
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -15,9 +14,8 @@ import (
 )
 
 const (
-	keysTableName         = "keys"
-	usageTableName        = "key_usages"
-	testSessionsTableName = "test_sessions"
+	keysTableName  = "keys"
+	usageTableName = "key_usages"
 )
 
 type KeyDetails struct {
@@ -116,114 +114,6 @@ func (s *SupabaseClient) GetKeyDetails(key string) (*KeyDetails, error) {
 	s.cache.Set(key, &keyDetails[0], cache.DefaultExpiration)
 
 	return &keyDetails[0], nil
-}
-
-func (s *SupabaseClient) LogKeyUsage(keyUsage *KeyUsage) error {
-	apiURL := fmt.Sprintf("%s/rest/v1/%s", s.superbaseConfig.Url, usageTableName)
-
-	jsonData, err := json.Marshal(keyUsage)
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to marshal key usage: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("apikey", s.superbaseConfig.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		bodyString := string(bodyBytes)
-		println(bodyString)
-		return fmt.Errorf("failed to log key usage, status code: %d, response: %s", resp.StatusCode, bodyString)
-	}
-
-	return nil
-}
-
-func (s *SupabaseClient) LogTestSession(sessionLog *TestSessionLog) error {
-	apiURL := fmt.Sprintf("%s/rest/v1/%s", s.superbaseConfig.Url, testSessionsTableName)
-
-	jsonData, err := json.Marshal(sessionLog)
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to marshal session log: %w", err)
-	}
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("apikey", s.superbaseConfig.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		println(err.Error())
-		return fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		bodyString := string(bodyBytes)
-		println(bodyString)
-		return fmt.Errorf("failed to log session, status code: %d, response: %s", resp.StatusCode, bodyString)
-	}
-
-	return nil
-}
-
-func (s *SupabaseClient) GetTestSessionLogs(sessionId, userId string) ([]TestSessionLog, error) {
-	apiURL := fmt.Sprintf("%s/rest/v1/%s?trace_session_id=eq.%s&user_id=eq.%s",
-		s.superbaseConfig.Url, testSessionsTableName, sessionId, userId)
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("apikey", s.superbaseConfig.Key)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.superbaseConfig.Key))
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		bodyString := string(bodyBytes)
-		return nil, fmt.Errorf("failed to get test session logs, status code: %d, response: %s", resp.StatusCode, bodyString)
-	}
-
-	var testSessionLogs []TestSessionLog
-	err = json.NewDecoder(resp.Body).Decode(&testSessionLogs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return testSessionLogs, nil
 }
 
 func (s SupabaseClient) hash(input string) string {
