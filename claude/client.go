@@ -162,7 +162,7 @@ func convertClaudeToOpenAI(model string, claudeResp anthropic.MessagesResponse) 
 func convertOpenAIToClaudeMessages(messages []openaigo.ChatCompletionMessage) []anthropic.Message {
 	claudeMessages := make([]anthropic.Message, 0)
 	for _, msg := range messages {
-		if msg.Role != "system" {
+		if msg.Role != "system" && msg.Content != "" {
 			// claude supprots system role only on top as a indipendent param
 			claudeMessages = append(claudeMessages, anthropic.Message{
 				Role: convertRole(msg.Role),
