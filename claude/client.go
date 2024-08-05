@@ -35,8 +35,8 @@ func (c *ClaudeClient) GenerateCompletions(payload openaigo.ChatCompletionReques
 
 	request := anthropic.MessagesRequest{
 		Model:    payload.Model,
-		Messages: convertOpenAIToClaudeMessages(payload.Messages),
 		System:   getSystemPrompt(payload),
+		Messages: convertOpenAIToClaudeMessages(payload.Messages),
 	}
 
 	if payload.MaxTokens > 0 {
@@ -160,16 +160,19 @@ func convertClaudeToOpenAI(model string, claudeResp anthropic.MessagesResponse) 
 }
 
 func convertOpenAIToClaudeMessages(messages []openaigo.ChatCompletionMessage) []anthropic.Message {
-	claudeMessages := make([]anthropic.Message, len(messages))
-	for i, msg := range messages {
-		claudeMessages[i] = anthropic.Message{
-			Role: convertRole(msg.Role),
-			Content: []anthropic.MessageContent{
-				{
-					Type: "text",
-					Text: &msg.Content,
+	claudeMessages := make([]anthropic.Message, 0)
+	for _, msg := range messages {
+		if msg.Role != "system" {
+			// claude supprots system role only on top as a indipendent param
+			claudeMessages = append(claudeMessages, anthropic.Message{
+				Role: convertRole(msg.Role),
+				Content: []anthropic.MessageContent{
+					{
+						Type: "text",
+						Text: &msg.Content,
+					},
 				},
-			},
+			})
 		}
 	}
 	return claudeMessages
@@ -180,7 +183,7 @@ func convertRole(role string) string {
 	case openaigo.ChatMessageRoleUser:
 		return "user"
 	case openaigo.ChatMessageRoleAssistant:
-		return "assistants"
+		return "assistant"
 	default:
 		return "system" // Default to user for system messages
 	}
