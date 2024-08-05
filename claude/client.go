@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -160,21 +161,48 @@ func convertClaudeToOpenAI(model string, claudeResp anthropic.MessagesResponse) 
 }
 
 func convertOpenAIToClaudeMessages(messages []openaigo.ChatCompletionMessage) []anthropic.Message {
-	claudeMessages := make([]anthropic.Message, 0)
+	var claudeMessages []anthropic.Message
+	var currentMessage *anthropic.Message
+
 	for _, msg := range messages {
-		if msg.Role != "system" && msg.Content != "" {
-			// claude supprots system role only on top as a indipendent param
-			claudeMessages = append(claudeMessages, anthropic.Message{
-				Role: convertRole(msg.Role),
-				Content: []anthropic.MessageContent{
-					{
+		if msg.Role != "system" {
+			role := convertRole(msg.Role)
+
+			if currentMessage == nil || currentMessage.Role != role {
+				if currentMessage != nil {
+					claudeMessages = append(claudeMessages, *currentMessage)
+				}
+				currentMessage = &anthropic.Message{Role: role}
+			}
+
+			if len(msg.Content) > 0 {
+				currentMessage.Content = append(currentMessage.Content, anthropic.MessageContent{
+					Type: "text",
+					Text: &msg.Content,
+				})
+			}
+
+			for _, content := range msg.MultiContent {
+				switch content.Type {
+				case "text":
+					currentMessage.Content = append(currentMessage.Content, anthropic.MessageContent{
 						Type: "text",
-						Text: &msg.Content,
-					},
-				},
-			})
+						Text: &content.Text,
+					})
+				case "image_url":
+					imgContent, err := parseImageURL(content.ImageURL.URL)
+					if err == nil {
+						currentMessage.Content = append(currentMessage.Content, imgContent)
+					}
+				}
+			}
 		}
 	}
+
+	if currentMessage != nil {
+		claudeMessages = append(claudeMessages, *currentMessage)
+	}
+
 	return claudeMessages
 }
 
@@ -185,8 +213,36 @@ func convertRole(role string) string {
 	case openaigo.ChatMessageRoleAssistant:
 		return "assistant"
 	default:
-		return "system" // Default to user for system messages
+		return "user" // Default to user for system messages
 	}
+}
+
+func parseImageURL(url string) (anthropic.MessageContent, error) {
+	parts := strings.Split(url, ",")
+	if len(parts) != 2 {
+		return anthropic.MessageContent{}, fmt.Errorf("invalid data URI format")
+	}
+
+	formatParts := strings.Split(parts[0], ";")
+	if len(formatParts) != 2 {
+		return anthropic.MessageContent{}, fmt.Errorf("invalid data URI format")
+	}
+
+	format := strings.TrimPrefix(formatParts[0], "data:")
+
+	imageData, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return anthropic.MessageContent{}, fmt.Errorf("failed to decode base64 image: %w", err)
+	}
+
+	return anthropic.MessageContent{
+		Type: "image",
+		Source: &anthropic.MessageContentImageSource{
+			Type:      "base64",
+			MediaType: format,
+			Data:      imageData,
+		},
+	}, nil
 }
 
 func getSystemPrompt(payload openaigo.ChatCompletionRequest) string {
