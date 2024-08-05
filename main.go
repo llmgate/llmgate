@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/llmgate/llmgate/claude"
 	"github.com/llmgate/llmgate/gemini"
 	googlemonitoring "github.com/llmgate/llmgate/googleMonitoring"
 	vconfig "github.com/llmgate/llmgate/internal/config"
@@ -50,6 +51,9 @@ func main() {
 	// Initialize Gemini Client
 	geminiClient := gemini.NewGeminiClient()
 
+	// Initialize Claude Client
+	claudeClient := claude.NewClaudeClient()
+
 	// Initialize Mock Client
 	mockLLMClient := mockllm.NewMockLLMClient()
 
@@ -76,7 +80,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler()
 	router.GET("/health", healthHandler.IsHealthy)
 	// LLM Handler
-	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *mockLLMClient, *supabaseClient, googleMonitoringClient, config.LLM, config.Handlers.LLMHandler)
+	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *claudeClient, *mockLLMClient, *supabaseClient, googleMonitoringClient, config.LLM, config.Handlers.LLMHandler)
 	router.POST("/completions", llmHandler.ProcessCompletions)
 
 	go func() {

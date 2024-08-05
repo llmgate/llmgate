@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	openaigo "github.com/sashabaranov/go-openai"
 
+	"github.com/llmgate/llmgate/claude"
 	"github.com/llmgate/llmgate/gemini"
 	googlemonitoring "github.com/llmgate/llmgate/googleMonitoring"
 	"github.com/llmgate/llmgate/internal/config"
@@ -24,6 +25,7 @@ const (
 	OpenAILLMProvider = "OpenAI"
 	GeminiLLMProvider = "Gemini"
 	MockLLMProvider   = "Mock"
+	ClaudeLLMProvider = "Claude"
 
 	providerQueryKey         = "provider"
 	llmgateLKeyHeaderKey     = "key"
@@ -38,6 +40,7 @@ const (
 type LLMHandler struct {
 	openaiClient           openai.OpenAIClient
 	geminiClient           gemini.GeminiClient
+	claudeClient           claude.ClaudeClient
 	mockllmClient          mockllm.MockLLMClient
 	supabaseClient         supabase.SupabaseClient
 	googleMonitoringClient *googlemonitoring.MonitoringClient
@@ -48,6 +51,7 @@ type LLMHandler struct {
 func NewLLMHandler(
 	openaiClient openai.OpenAIClient,
 	geminiClient gemini.GeminiClient,
+	claudeClient claude.ClaudeClient,
 	mockllmClient mockllm.MockLLMClient,
 	supabaseClient supabase.SupabaseClient,
 	googleMonitoringClient *googlemonitoring.MonitoringClient,
@@ -56,6 +60,7 @@ func NewLLMHandler(
 	return &LLMHandler{
 		openaiClient:           openaiClient,
 		geminiClient:           geminiClient,
+		claudeClient:           claudeClient,
 		mockllmClient:          mockllmClient,
 		supabaseClient:         supabaseClient,
 		googleMonitoringClient: googleMonitoringClient,
@@ -199,7 +204,7 @@ func (h *LLMHandler) logUsageMetrics(ctx context.Context, requestSource string) 
 
 func isValidProvider(provider string) bool {
 	switch provider {
-	case OpenAILLMProvider, GeminiLLMProvider, MockLLMProvider:
+	case OpenAILLMProvider, GeminiLLMProvider, MockLLMProvider, ClaudeLLMProvider:
 		return true
 	default:
 		return false
@@ -215,6 +220,8 @@ func (h *LLMHandler) generateOpenAIResponse(
 		return h.openaiClient.GenerateCompletions(openaiRequest, apiKey)
 	case GeminiLLMProvider:
 		return h.geminiClient.GenerateCompletions(openaiRequest, apiKey)
+	case ClaudeLLMProvider:
+		return h.claudeClient.GenerateCompletions(openaiRequest, apiKey)
 	case MockLLMProvider:
 		return h.mockllmClient.GenerateCompletions(openaiRequest)
 	default:
@@ -231,6 +238,8 @@ func (h *LLMHandler) generateOpenAIStreamResponse(
 		return h.openaiClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	case GeminiLLMProvider:
 		return h.geminiClient.GenerateCompletionsStream(openaiRequest, apiKey)
+	case ClaudeLLMProvider:
+		return h.claudeClient.GenerateCompletionsStream(openaiRequest, apiKey)
 	default:
 		return nil, nil, fmt.Errorf("unsupported llm provider: %s", llmProvider)
 	}
@@ -242,6 +251,8 @@ func (h *LLMHandler) getKeyForProvider(provider string) string {
 		return h.llmConfigs.OpenAI.Key
 	case "Gemini":
 		return h.llmConfigs.Gemini.Key
+	case "Claude":
+		return h.llmConfigs.Claude.Key
 	default:
 		return ""
 	}

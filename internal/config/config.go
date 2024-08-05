@@ -41,6 +41,7 @@ type LLMHandlerConfig struct {
 type LLMConfigs struct {
 	OpenAI OpenAIConfig
 	Gemini GeminiConfig
+	Claude ClaudeConfig
 }
 
 type OpenAIConfig struct {
@@ -48,6 +49,10 @@ type OpenAIConfig struct {
 }
 
 type GeminiConfig struct {
+	Key string
+}
+
+type ClaudeConfig struct {
 	Key string
 }
 
