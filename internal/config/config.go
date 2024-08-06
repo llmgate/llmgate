@@ -32,10 +32,7 @@ type HandlersConfig struct {
 }
 
 type LLMHandlerConfig struct {
-	CompletionTestProvider      string
-	CompletionTestModel         string
-	CompletionTestTemperature   float32
-	CompletionTestParallelCount int
+	RefinePrompt string
 }
 
 type LLMConfigs struct {

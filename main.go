@@ -82,6 +82,7 @@ func main() {
 	// LLM Handler
 	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *claudeClient, *mockLLMClient, *supabaseClient, googleMonitoringClient, config.LLM, config.Handlers.LLMHandler)
 	router.POST("/completions", llmHandler.ProcessCompletions)
+	router.POST("/prompt/refine", llmHandler.RefinePrompt)
 
 	go func() {
 		for {

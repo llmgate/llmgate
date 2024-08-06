@@ -132,10 +132,80 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	c.Header(latencyHeaderResponseKey, fmt.Sprintf("%d", latency.Nanoseconds()))
 
 	go func() {
-		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey))
+		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey), "completion")
 	}()
 
 	c.JSON(http.StatusOK, extendedResponse.ChatCompletionResponse)
+}
+
+func (h *LLMHandler) RefinePrompt(c *gin.Context) {
+	llmProvider, _ := c.GetQuery(providerQueryKey)
+	if llmProvider == "" {
+		// default
+		llmProvider = OpenAILLMProvider
+	} else if !isValidProvider(llmProvider) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid llm provider"})
+		return
+	}
+
+	llmgateApiKey := c.GetHeader(llmgateLKeyHeaderKey)
+	if llmgateApiKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
+		return
+	}
+
+	keyDetails := utils.ValidateLLMGateKey(llmgateApiKey, h.supabaseClient)
+	if keyDetails == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
+		return
+	}
+
+	var refinePromptRequest models.RefinePromptRequest
+	if err := c.ShouldBindJSON(&refinePromptRequest); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	openaiRequest := openaigo.ChatCompletionRequest{
+		Model:       "gpt-4o-mini",
+		Temperature: 0,
+		Messages: []openaigo.ChatCompletionMessage{
+			{
+				Role:    openaigo.ChatMessageRoleSystem,
+				Content: h.handlerConfig.RefinePrompt,
+			},
+			{
+				Role:    openaigo.ChatMessageRoleUser,
+				Content: refinePromptRequest.Prompt,
+			},
+		},
+	}
+
+	response, err := h.generateOpenAIResponse(
+		OpenAILLMProvider,
+		openaiRequest,
+		h.getKeyForProvider(OpenAILLMProvider),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	jsonStr := response.ChatCompletionResponse.Choices[0].Message.Content
+
+	var refinePromptResponse models.RefinePromptResponse
+	err = json.Unmarshal([]byte(jsonStr), &refinePromptResponse)
+	if err != nil {
+		println(jsonStr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	go func() {
+		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey), "refinePrompt")
+	}()
+
+	c.JSON(http.StatusOK, refinePromptResponse)
 }
 
 func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
@@ -189,17 +259,18 @@ func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
 	flusher.Flush()
 }
 
-func (h *LLMHandler) logUsageMetrics(ctx context.Context, requestSource string) {
+func (h *LLMHandler) logUsageMetrics(ctx context.Context, requestSource, metricType string) {
 	if h.googleMonitoringClient == nil {
 		return
 	}
 
 	labels := map[string]string{
-		"source": requestSource,
+		"metric_source": requestSource,
+		"metric_type":   metricType,
 	}
 
 	// add metrics for requests
-	h.googleMonitoringClient.RecordCounter("requests", labels, 1)
+	h.googleMonitoringClient.RecordCounter("llmgate_requests", labels, 1)
 }
 
 func isValidProvider(provider string) bool {
