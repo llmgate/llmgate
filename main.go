@@ -94,7 +94,7 @@ func main() {
 	router.GET("/health", healthHandler.IsHealthy)
 	// Validate Handler
 	validateHandler := handlers.NewValidateHandler(*supabaseClient)
-	router.GET("/validate", validateHandler.ValidateLLMGateKey)
+	router.POST("/validate", validateHandler.ValidateLLMGateKey)
 	// LLM Handler
 	llmHandler := handlers.NewLLMHandler(*openaiClient, *geminiClient, *claudeClient, *mockLLMClient, *supabaseClient, googleMonitoringClient, config.LLM, config.Handlers.LLMHandler)
 	router.POST("/completions", llmHandler.ProcessCompletions)

@@ -75,14 +75,14 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 		// default
 		llmProvider = OpenAILLMProvider
 	} else if !isValidProvider(llmProvider) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid llm provider"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid llm provider"})
 		return
 	}
 
 	llmgateApiKey := c.GetHeader(llmgateLKeyHeaderKey)
 	externalLlmApiKey := c.GetHeader(llmApiHeaderKey)
 	if llmgateApiKey == "" && externalLlmApiKey == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "please provide api key in your header"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "please provide api key in your header"})
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *LLMHandler) ProcessCompletions(c *gin.Context) {
 	if llmProvider != MockLLMProvider && llmgateApiKey != "" {
 		keyDetails = utils.ValidateLLMGateKey(llmgateApiKey, h.supabaseClient)
 		if keyDetails == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "please provide a valid llmgate api key in your header"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "please provide a valid llmgate api key in your header"})
 			return
 		}
 	}
