@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -72,6 +73,16 @@ func main() {
 
 	// Initialize Router
 	router := gin.Default()
+	// CORS Setup
+	// Configure CORS
+	if len(config.Server.CorsOrigin) > 0 {
+		router.Use(cors.New(cors.Config{
+			AllowOrigins: config.Server.CorsOrigin,
+			AllowMethods: config.Server.AllowMethods,
+			AllowHeaders: config.Server.AllowHeaders,
+		}))
+	}
+
 	// Local Rate Limiter
 	router.Use(rateLimiter.RateLimiterMiddleware())
 	// Metrics handler
