@@ -75,11 +75,11 @@ func main() {
 	router := gin.Default()
 	// CORS Setup
 	// Configure CORS
-	if len(config.Server.CorsOrigin) > 0 {
+	if len(config.Server.CorsOrigins) > 0 {
 		router.Use(cors.New(cors.Config{
-			AllowOrigins: config.Server.CorsOrigin,
-			AllowMethods: config.Server.AllowMethods,
-			AllowHeaders: config.Server.AllowHeaders,
+			AllowOrigins: config.Server.CorsOrigins,
+			AllowMethods: config.Server.AllowedMethods,
+			AllowHeaders: config.Server.AllowedHeaders,
 		}))
 	}
 

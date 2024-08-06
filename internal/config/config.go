@@ -19,10 +19,10 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port         int
-	CorsOrigin   []string
-	AllowMethods []string
-	AllowHeaders []string
+	Port           int
+	CorsOrigins    []string
+	AllowedMethods []string
+	AllowedHeaders []string
 }
 
 type GoogleServiceConfig struct {
