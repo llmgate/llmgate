@@ -77,9 +77,11 @@ func main() {
 	// Configure CORS
 	if len(config.Server.CorsOrigins) > 0 {
 		router.Use(cors.New(cors.Config{
-			AllowOrigins: config.Server.CorsOrigins,
-			AllowMethods: config.Server.AllowedMethods,
-			AllowHeaders: config.Server.AllowedHeaders,
+			AllowOrigins:     config.Server.CorsOrigins,
+			AllowMethods:     config.Server.AllowedMethods,
+			AllowHeaders:     config.Server.AllowedHeaders,
+			AllowCredentials: false,
+			MaxAge:           0,
 		}))
 	}
 
