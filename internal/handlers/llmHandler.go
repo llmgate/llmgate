@@ -193,13 +193,42 @@ func (h *LLMHandler) RefinePrompt(c *gin.Context) {
 
 	refinedPrompt := response.ChatCompletionResponse.Choices[0].Message.Content
 
+	openaiReasoningRequest := openaigo.ChatCompletionRequest{
+		Model:       "gpt-4o",
+		Temperature: 0,
+		Messages: []openaigo.ChatCompletionMessage{
+			{
+				Role:    openaigo.ChatMessageRoleSystem,
+				Content: fmt.Sprintf(h.handlerConfig.RefineReasoningPrompt, refinePromptRequest.Prompt, refinedPrompt),
+			},
+		},
+	}
+
+	openaiReasoningResponse, err := h.generateOpenAIResponse(
+		OpenAILLMProvider,
+		openaiReasoningRequest,
+		h.getKeyForProvider(OpenAILLMProvider),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	reasoningsJsonArrStr := openaiReasoningResponse.ChatCompletionResponse.Choices[0].Message.Content
+
+	var reasonings []string
+	err = json.Unmarshal([]byte(reasoningsJsonArrStr), &reasonings)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	go func() {
 		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey), "refinePrompt")
 	}()
 
 	c.JSON(http.StatusOK, models.RefinePromptResponse{
 		RefinedPrompt: refinedPrompt,
-		Reasonings:    []string{},
+		Reasonings:    reasonings,
 	})
 }
 

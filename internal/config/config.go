@@ -35,7 +35,8 @@ type HandlersConfig struct {
 }
 
 type LLMHandlerConfig struct {
-	RefinePrompt string
+	RefinePrompt          string
+	RefineReasoningPrompt string
 }
 
 type LLMConfigs struct {
