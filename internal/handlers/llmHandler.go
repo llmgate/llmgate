@@ -191,21 +191,16 @@ func (h *LLMHandler) RefinePrompt(c *gin.Context) {
 		return
 	}
 
-	jsonStr := response.ChatCompletionResponse.Choices[0].Message.Content
-
-	var refinePromptResponse models.RefinePromptResponse
-	err = json.Unmarshal([]byte(jsonStr), &refinePromptResponse)
-	if err != nil {
-		println(jsonStr)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	refinedPrompt := response.ChatCompletionResponse.Choices[0].Message.Content
 
 	go func() {
 		h.logUsageMetrics(c.Request.Context(), c.GetHeader(requestSourceHeaderKey), "refinePrompt")
 	}()
 
-	c.JSON(http.StatusOK, refinePromptResponse)
+	c.JSON(http.StatusOK, models.RefinePromptResponse{
+		RefinedPrompt: refinedPrompt,
+		Reasonings:    []string{},
+	})
 }
 
 func (h *LLMHandler) processCompletionsStreamImpl(c *gin.Context,
