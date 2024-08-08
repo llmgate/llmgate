@@ -167,7 +167,7 @@ func (h *LLMHandler) RefinePrompt(c *gin.Context) {
 	}
 
 	openaiRequest := openaigo.ChatCompletionRequest{
-		Model:       "gpt-4o-mini",
+		Model:       "gpt-4o",
 		Temperature: 0,
 		Messages: []openaigo.ChatCompletionMessage{
 			{
